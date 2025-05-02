@@ -15,7 +15,7 @@ from amaker.serial_manager import SerialManager
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 # OpenCV constants
-CV_THREADS = 7
+CV_THREADS = 4
 WINDOW_TITLE = "aMaker microbot tracker"
 DEFAULT_SCREEN_WIDTH = 1280
 DEFAULT_SCREEN_HEIGHT = 960
@@ -80,14 +80,16 @@ class LogDisplay:
         self.max_logs = max_logs
 
     def add_log(self, message):
-        self.logs.append(message)
+        current_time = datetime.datetime.now().strftime("%H%M%S")
+        self.logs.append(current_time+" "+str(message))
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
 
     def draw_logs(self, frame):
-        for i, log in enumerate(self.logs):
-            y_pos = frame.shape[0] - 30 - (i * 20)
-            cv2.putText(frame, log, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        if self.logs:
+            for i, log in enumerate(reversed(self.logs)):
+                y_pos = frame.shape[0] - 30 - (i * 20)
+                cv2.putText(frame, log, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
 
 class Bot:
@@ -392,23 +394,13 @@ class AmakerBotTracker():
                 y_pos = 30 + (i * 25)  # Stagger vertical positions
                 cv2.putText(display_frame, bot_tracker.get_bot_info(), (50, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                             bot_tracker.trail_color, 2)
-
+            self.logHistory.draw_logs(display_frame)
             cv2.imshow(window_name, display_frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == KEY_Q or key == KEY_CTRL_D or key == KEY_ESC:  # 'q' or Ctrl+D or ESC to quit
                 break
 
-    def start_tracking_new(self, recording=False, window_name=WINDOW_TITLE):
-        """Start tracking bots in video feed"""
-        self._initialize_window(window_name)
-        buttons = self._create_buttons(window_name)
-        video_writer = self._setup_video_recording(recording)
-
-        try:
-            self._main_tracking_loop(window_name, buttons, video_writer)
-        finally:
-            self._cleanup_resources(video_writer)
 
     def start_tracking(self, recording: bool = False, window_name=WINDOW_TITLE):
         """Start tracking bots in video feed"""
@@ -452,21 +444,20 @@ class AmakerBotTracker():
                 self.video_capture.release()
                 logging.info("Video capture released")
         except Exception as e:
-            logging.error(f"Error during cleanup: {e}")
+            logging.error(f"Error during capture cleanup: {e}")
         try:
             cv2.destroyAllWindows()
             logging.info("All windows destroyed")
         except Exception as e:
-            logging.error(f"Error during cleanup: {e}")
-        except Exception as e:
-            logging.error(f"Error during cleanup: {e}")
+            logging.error(f"Error during winwow cleanup: {e}")
+
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     bot1 = Bot(name="redBot", color_a=(106, 40, 30), color_b=(150, 70, 60), trail_color=(0,0,255))
-    bot1 = Bot(name="blueBot", color_a=(106, 40, 30), color_b=(150, 70, 60), trail_color=(255,128,0))
-    bot2 = Bot(name="yellowBot", color_a=(150, 106, 30), color_b=(150, 150, 60), trail_color=(0,255,255))
+    bot2 = Bot(name="blueBot", color_a=(106, 40, 30), color_b=(150, 70, 60), trail_color=(255,128,0))
+    bot3 = Bot(name="yellowBot", color_a=(150, 106, 30), color_b=(150, 150, 60), trail_color=(0,255,255))
 
     # Create serial manager
     serial_manager = SerialManager()
