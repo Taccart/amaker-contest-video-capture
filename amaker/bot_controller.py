@@ -1,7 +1,6 @@
 import datetime
 import logging
 import os
-from enum import Enum
 from typing import List
 
 import cv2
@@ -9,23 +8,28 @@ import numpy as np
 
 # Import SerialManager from the new file
 from amaker.serial_manager import SerialManager
+from amaker.bot import Bot
 
 # ===== Global Constants =====
 # Environment settings
 os.environ["QT_QPA_PLATFORM"] = "xcb"
-
+# exit codes
+EXIT_NO_CAMERA=1
+EXIT_INVALID_CAMERA_CHOICE=2
 # OpenCV constants
 CV_THREADS = 4
+# Window settings
 WINDOW_TITLE = "aMaker microbot tracker"
-DEFAULT_SCREEN_WIDTH = 1280
-DEFAULT_SCREEN_HEIGHT = 960
+DEFAULT_SCREEN_WIDTH = 1920
+DEFAULT_SCREEN_HEIGHT = 1080
+#CAMERA_SEARCH_LIMIT
 CAMERA_SEARCH_LIMIT = 10
 
 # Video recording constants
 VIDEO_CODEC = 'XVID'
 VIDEO_FPS = 30.0
-VIDEO_WIDTH = 1280
-VIDEO_HEIGHT = 960
+VIDEO_WIDTH = 1920
+VIDEO_HEIGHT = 1080
 
 # UI constants
 TEXT_COLOR_WHITE = (255, 255, 255)
@@ -35,6 +39,7 @@ UI_COLOR_PRIMARY = (250, 250, 250)  # Button fill color
 UI_COLOR_SECONDARY = (100, 100, 100)  # Button border color
 UI_TEXT_SCALE = 1.2
 UI_TEXT_THICKNESS = 2
+UI_DEFAULT_IMAGE_MASK= '/home/taccart/VSCode/amaker-path-capture/resources/background.png'
 BUTTON_HEIGHT = 50
 BUTTON_WIDTH = 140
 BUTTON_X_POS = 1400
@@ -50,32 +55,17 @@ KEY_Q = ord('q')
 KEY_F = ord('f')
 
 
-class BotStatus(Enum):
-    """Enum for bot states"""
-    UNKNOWN = -1
-    WAITING = 0
-    MOVING = 1
-    SEARCHING = 2
-    FETCHING = 3
-    CATCHING = 4
-    DROPING = 5
-    STOPPED = 6
-    TO_SAFETY = 10
-    MISSON_COMPLETED = 20
 
 
 # Bot tracker constants
-DEFAULT_BOT_COLOR_A = (0, 0, 250)
-DEFAULT_BOT_COLOR_B = (0, 0, 255)
-DEFAULT_TRAIL_COLOR = (0, 0, 250)
-DEFAULT_TRAIL_LENGTH = 20
-COMMAND_START = "START"
+
+COMMAND_START = "123456789-12345679-123456789-123456789-"
 COMMAND_STOP = "STOP"
 COMMAND_SAFETY = "SAFETY"
 
 
 class LogDisplay:
-    def __init__(self, max_logs=5):
+    def __init__(self, max_logs=8):
         self.logs = []
         self.max_logs = max_logs
 
@@ -89,71 +79,7 @@ class LogDisplay:
         if self.logs:
             for i, log in enumerate(reversed(self.logs)):
                 y_pos = frame.shape[0] - 30 - (i * 20)
-                cv2.putText(frame, log, (10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-
-
-class Bot:
-    """Class to track a bot's position and color (for identification and video feedback)"""
-
-    def __init__(self, name: str = "microbot", id: int = None, color_a=DEFAULT_BOT_COLOR_A, color_b=DEFAULT_BOT_COLOR_B,
-                 trail_color=DEFAULT_TRAIL_COLOR, trail_length: int = DEFAULT_TRAIL_LENGTH):
-        self.name = name
-        self.id = id
-        self.color_a = color_a
-        self.color_b = color_b
-        self.trail_color = trail_color
-        self.trail_length = trail_length
-        self.trail = []
-        self.status: BotStatus = BotStatus.UNKNOWN
-        self.total_distance = 0
-
-    def add_position(self, position):
-        """Add a new position to the bot's trail"""
-        self.trail.append(position)
-        if len(self.trail) > self.trail_length:
-            self.trail.pop(0)
-        self.total_distance += self.calculate_distance(position)
-        logging.debug(f"bot {self.name}:{self.id}, position: {self.get_last_position()}, total distance: {self.total_distance:.2f}")
-
-    def get_last_position(self) -> tuple:
-        """Get the last known position of the bot"""
-        if self.trail:
-            return self.trail[-1]
-        else:
-            return None
-
-    def set_bot_status(self, state: BotStatus):
-        """Set the bot's state"""
-        self.status = state
-        logging.info(f"Bot {self.name}:{self.id} state changed to {self.status.name}")
-
-    def get_bot_status(self) -> BotStatus:
-        """Get the current state of the bot"""
-        return self.status
-
-    def calculate_distance(self, position) -> float:
-        """Calculate the distance from the last position to the current position"""
-        if len(self.trail) < 2:
-            return 0
-        last_position = self.trail[-2]
-        distance = np.linalg.norm(np.array(position) - np.array(last_position))
-        return distance
-
-    def get_total_distance(self) -> float:
-        """Get the total distance traveled by the bot"""
-        return self.total_distance
-
-    def get_trail(self) -> List:
-        """Get the bot's trail"""
-        return self.trail
-
-    def get_bot_info(self) -> str:
-        """Get bot information"""
-        return f"{self.name}.{self.id}  is {self.get_bot_status()}"
-
-    def __repr__(self):
-        return f"BotTracker(name={self.name}, color_a={self.color_a}, color_b={self.color_b}, trail_color={self.trail_color}, trail_length={self.trail_length})"
-
+                cv2.putText(frame, log, (10, y_pos), cv2.FONT_HERSHEY_PLAIN, 1.5, (200, 200, 200), 1)
 
 class AmakerBotTracker():
     def __init__(self, camera_index: int = 0, bot_trackers: List[Bot] = None, serial_manager=None):
@@ -170,18 +96,29 @@ class AmakerBotTracker():
         if len(bot_trackers) < 1:
             raise ValueError("No bot trackers provided.")
         self.tracked_bots = bot_trackers
-        self.camera_index = self.camera_choice() if camera_index <= 0 else camera_index
+        self.camera_index = self.user_input_camera_choice() if camera_index <= 0 else camera_index
 
         self.video_capture = cv2.VideoCapture(self.camera_index)
         cv2.setLogLevel(2)  # Set OpenCV log severity to no logs
         if not self.video_capture.isOpened():
             raise ValueError(f"Camera {camera_index} not found or cannot be opened.")
 
-    def camera_choice(self) -> int:
+
+    def bot_assign_colors(self):
+        ## broadcast new colors of all bots
+        raise NotImplementedError
+    def bot_verify_colors(self):
+        ## check aknowledgement of new colors for all bots
+        raise NotImplementedError
+    def _update_bot_position(self):
+        raise NotImplementedError
+
+    def user_input_camera_choice(self) -> int | None:
         """Select a camera from available cameras"""
         index = 0
         available_cameras = []
         logging.info(f"Searching for cameras...")
+        cap=None
         while True:
             try:
                 cap = cv2.VideoCapture(index)
@@ -190,16 +127,22 @@ class AmakerBotTracker():
                 else:
                     logging.info(f"Camera {index} : ok.")
                     available_cameras.append(index)
-                    cap.release()
+
             except Exception as e:
                 logging.warning(f"Camera {index}: error {e}")
+            finally:
+                try:
+                    if cap:
+                        cap.release()
+                except Exception as e:
+                    logging.warning(f"Camera {index}: error releasing {e}")
             if index > CAMERA_SEARCH_LIMIT:
                 break
             index += 1
 
         if not available_cameras:
             logging.error("No cameras found!")
-            exit()
+            exit(EXIT_NO_CAMERA)
 
         # choose camera to be used 
         print("\nAvailable cameras:")
@@ -209,11 +152,12 @@ class AmakerBotTracker():
         selected_camera = int(input("\nSelect the camera index to use: "))
         if selected_camera not in available_cameras:
             logging.error("Invalid camera index selected!")
-            exit()
-        return selected_camera
+            exit(EXIT_INVALID_CAMERA_CHOICE)
+        else:
+            return selected_camera
 
     # Button callback functions
-    def button_start(self):
+    def _on_button_start(self):
         """Handle start button click"""
 
         if self.serial_manager:
@@ -222,7 +166,7 @@ class AmakerBotTracker():
         else:
             self.logHistory.add_log(f"unsent: {COMMAND_START}")
 
-    def button_stop(self):
+    def _on_button_stop(self):
         """Handle stop button click"""
         if self.serial_manager:
             self.serial_manager.send_command(COMMAND_STOP)
@@ -230,7 +174,7 @@ class AmakerBotTracker():
         else:
             self.logHistory.add_log(f"unsent: {COMMAND_STOP}")
 
-    def button_safety(self):
+    def _on_button_safety(self):
         """Handle safety button click"""
         if self.serial_manager:
             self.serial_manager.send_command(COMMAND_SAFETY)
@@ -253,7 +197,8 @@ class AmakerBotTracker():
             except Exception as e:
                 logging.error(f"Error tracking {bot.name}: {e}")
 
-    def _add_button(self, button, frame):
+    @staticmethod
+    def _add_button(button, frame):
         cv2.rectangle(frame, (button['x'], button['y']), (button['x'] + button['w'], button['y'] + button['h']),
                       UI_COLOR_PRIMARY, -1)  # Filled rectangle
         cv2.rectangle(frame, (button['x'], button['y']), (button['x'] + button['w'], button['y'] + button['h']),
@@ -284,10 +229,25 @@ class AmakerBotTracker():
         # Draw buttons
         for button in buttons:
             self._add_button(button, display_frame)
+    # Load transparent PNG image (do this once in __init__ for efficiency)
+        if not hasattr(self, 'logo_image'):
+            # Load with transparency preserved
+            self.logo_image = cv2.imread(UI_DEFAULT_IMAGE_MASK, cv2.IMREAD_UNCHANGED)
+            # Optional: resize if needed
+            # self.logo_image = cv2.resize(self.logo_image, (width, height))
+
+        # Add the transparent image to display_frame
+        if hasattr(self, 'logo_image') and self.logo_image is not None:
+            # Position in top-right corner (adjust x,y as needed)
+            x = display_frame.shape[1] - self.logo_image.shape[1] - 20
+            y = 20
+            self._overlay_transparent_image(display_frame, self.logo_image, x, y)
+
+        # Your existing c   ode for buttons, text, etc.
 
         return display_frame
 
-    def _setup_video_recording(self, recording):
+    def _setup_video_recording(self, recording)-> cv2.VideoWriter | None:
         video_writer = None
         if recording:
             fourcc = cv2.VideoWriter_fourcc(*VIDEO_CODEC)
@@ -299,16 +259,60 @@ class AmakerBotTracker():
             logging.info("No video recording.")
         return video_writer
 
+    def _overlay_transparent_image(self, background, overlay, x, y):
+        """
+        Overlay a transparent PNG image onto the background
+
+        Args:
+            background: The background frame
+            overlay: The transparent PNG image with alpha channel
+            x, y: Top-left position to place the overlay
+        """
+        # Get image sizes
+        h, w = overlay.shape[:2]
+
+        # Check if overlay exceeds frame boundaries
+        if y + h > background.shape[0] or x + w > background.shape[1]:
+            # Crop overlay to fit within frame
+            h = min(h, background.shape[0] - y)
+            w = min(w, background.shape[1] - x)
+            overlay = overlay[:h, :w]
+
+        # Get the alpha channel and RGB channels
+        if overlay.shape[2] == 4:  # With alpha channel
+            alpha = overlay[:, :, 3] / 255.0
+            alpha = np.expand_dims(alpha, axis=2)
+            rgb = overlay[:, :, :3]
+
+            # Calculate the foreground and background
+            foreground = rgb * alpha
+            background_area = background[y:y+h, x:x+w, :3] * (1 - alpha)
+
+            # Combine foreground and background
+            background[y:y+h, x:x+w, :3] = foreground + background_area
+
     def _cleanup_resources(self, video_writer):
-        if self.serial_manager:
-            self.serial_manager.close()
-            logging.info("Serial port closed.")
-        self.video_capture.release()
-        logging.info("Video capture released.")
-        if video_writer:
-            # Release the video writer
-            video_writer.release()
-            logging.info("Video saved successfully.")
+        try:
+            if self.serial_manager:
+                self.serial_manager.close()
+                logging.info("Serial port closed.")
+        except Exception as e:
+            logging.warning(f"Error during serial cleanup: {e}")
+
+        try:
+            self.video_capture.release()
+            logging.info("Video capture released.")
+        except Exception as e:
+            logging.warning(f"Error during video capture release: {e}")
+
+        try:
+            if video_writer:
+                # Release the video writer
+                video_writer.release()
+                logging.info("Video writer released successfully.")
+        except Exception as e:
+            logging.warning(f"Error during video capture release: {e}")
+
 
     def _initialize_window(self, window_name):
         ret, input_frame = self.video_capture.read()
@@ -325,7 +329,7 @@ class AmakerBotTracker():
 
         return (input_frame, original_height, original_width)
 
-    def _create_buttons(self, window_name):
+    def _create_buttons_list(self, window_name):
         # Define buttons
         button_start = {'x': BUTTON_X_POS + BUTTON_MARGIN_X, 'y': BUTTON_MARGIN_Y, 'w': BUTTON_WIDTH,
                         'h': BUTTON_HEIGHT, 'text': 'Start', 'clicked': False}
@@ -340,13 +344,13 @@ class AmakerBotTracker():
             if event == cv2.EVENT_LBUTTONDOWN:
                 if (button_safety['x'] <= x <= button_safety['x'] + button_safety['w'] and button_safety['y'] <= y <=
                         button_safety['y'] + button_safety['h']):
-                    self.button_safety()  # Custom method to handle button click
+                    self._on_button_safety()  # Custom method to handle button click
                 elif (button_start['x'] <= x <= button_start['x'] + button_start['w'] and button_start['y'] <= y <=
                       button_start['y'] + button_start['h']):
-                    self.button_start()
+                    self._on_button_start()
                 elif (button_stop['x'] <= x <= button_stop['x'] + button_stop['w'] and button_stop['y'] <= y <=
                       button_stop['y'] + button_stop['h']):
-                    self.button_stop()
+                    self._on_button_stop()
 
         # Set the mouse callback
         cv2.setMouseCallback(window_name, mouse_callback)
@@ -405,7 +409,7 @@ class AmakerBotTracker():
     def start_tracking(self, recording: bool = False, window_name=WINDOW_TITLE):
         """Start tracking bots in video feed"""
         input_frame, original_height, original_width = self._initialize_window(window_name)
-        buttons = self._create_buttons(window_name)
+        buttons = self._create_buttons_list(window_name)
 
         self.is_fullscreen = True
         original_height, original_width = input_frame.shape[:2]
@@ -421,16 +425,18 @@ class AmakerBotTracker():
             # Fallback to reasonable defaults if we can't get screen info
             self.screen_width, self.screen_height = DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT
             logging.warning(f"Couldn't detect screen size. Using defaults: {self.screen_width}x{self.screen_height}")
+        video_writer=None
+        try:
+            video_writer = self._setup_video_recording(recording)
+            logging.info(f"Bot trackers: {self.tracked_bots}")
+            logging.info(f"Press 'q' or ESC to quit.")
+            logging.info(f"Press 'f' to toggle full screen.")
+            self._main_tracking_loop(window_name, buttons, video_writer)
+        except Exception as e:
+            logging.error(f"Error during video tracking: {e}")
+        finally:
 
-        video_writer = self._setup_video_recording(recording)
-
-        logging.info(f"Bot trackers: {self.tracked_bots}")
-        logging.info(f"Press 'q' or ESC to quit.")
-        logging.info(f"Press 'f' to toggle full screen.")
-
-        self._main_tracking_loop(window_name, buttons, video_writer)
-
-        self._cleanup_resources(video_writer)
+            self._cleanup_resources(video_writer)
 
     def __del__(self):
         """Destructor cleans up resources"""
