@@ -6,6 +6,7 @@ Handles all serial port operations in a thread-safe manner.
 import logging
 import threading
 import time
+
 import serial
 import serial.tools.list_ports
 
@@ -15,8 +16,10 @@ SERIAL_DEFAULT_BAUD_RATE = 115200
 SERIAL_READ_DELAY = 0.01
 THREAD_JOIN_TIMEOUT = 1.0
 
+
 class SerialManager:
     """Class to manage serial communication"""
+
     def __init__(self, serial_port=None, baud_rate=SERIAL_DEFAULT_BAUD_RATE):
         """Initialize the serial manager"""
         self.serial_port = serial_port
@@ -25,35 +28,35 @@ class SerialManager:
         self.serial_running = False
         self.serial_data = []
         self.serial_thread = None
-        
+
         if serial_port is not None:
             self.initialize_connection()
-    
+
     def initialize_connection(self):
         """Initialize serial connection"""
         try:
             if not self.connect_serial(self.serial_port, self.baud_rate):
                 logging.warning("Serial connection not established.")
                 return False
-            
+
             self.start_reading()
             return True
         except serial.SerialException as e:
             logging.error(f"Failed to connect to serial port: {e}")
             return False
-    
+
     def list_serial_ports(self):
         """List all available serial ports"""
         ports = serial.tools.list_ports.comports()
         available_ports = []
-        
+
         print("\nAvailable serial ports:")
         for i, port in enumerate(ports):
             print(f"{i}: {port.device} - {port.description}")
             available_ports.append(port.device)
-            
+
         return available_ports
-    
+
     def connect_serial(self, port=None, baud_rate=None):
         """Connect to a serial port"""
         if not port:
@@ -61,7 +64,7 @@ class SerialManager:
             if not available_ports:
                 logging.warning("No serial ports available")
                 return False
-                
+
             logging.info("Available serial ports listed")
             try:
                 selection = int(input("\nSelect serial port number (or -1 to skip): "))
@@ -71,9 +74,9 @@ class SerialManager:
             except (ValueError, IndexError):
                 logging.error("Invalid selection")
                 return False
-        
+
         baud_rate = baud_rate or self.baud_rate
-        
+
         try:
             self.serial_connection = serial.Serial(port, baud_rate, timeout=SERIAL_TIMEOUT)
             logging.info(f"Connected to {port} at {baud_rate} baud")
@@ -83,7 +86,7 @@ class SerialManager:
         except serial.SerialException as e:
             logging.error(f"Failed to connect to serial port: {e}")
             return False
-    
+
     def start_reading(self):
         """Start the serial reading thread"""
         if self.serial_connection and self.serial_connection.is_open:
@@ -95,7 +98,7 @@ class SerialManager:
         else:
             logging.info("Serial thread NOT started")
             return False
-    
+
     def read_serial(self):
         """Read data from serial port in a separate thread"""
         self.serial_running = True
@@ -110,7 +113,7 @@ class SerialManager:
             except Exception as e:
                 logging.error(f"Serial read error: {e}")
                 break
-    
+
     def send_command(self, command):
         """Send a command to the serial port"""
         if self.serial_connection and self.serial_connection.is_open:
@@ -125,17 +128,17 @@ class SerialManager:
         else:
             logging.warning(f"Serial connection not available: message not sent was {command}")
             return False
-    
+
     def get_next_data(self):
         """Get the next data item from the serial buffer"""
         if self.serial_data and len(self.serial_data) > 0:
             return self.serial_data.pop(0)
         return None
-    
+
     def has_data(self):
         """Check if there is data available"""
         return len(self.serial_data) > 0
-    
+
     def close(self):
         """Close the serial connection"""
         if self.serial_connection and self.serial_connection.is_open:
@@ -146,7 +149,7 @@ class SerialManager:
             logging.info("Serial connection closed")
             return True
         return False
-    
+
     def __del__(self):
         """Destructor to clean up resources"""
         self.close()
