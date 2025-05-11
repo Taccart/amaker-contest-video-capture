@@ -2,3 +2,5 @@ opencv-python
 numpy
 screeninfo
 pyserial
+pyapriltags
+#pupil-apriltags
