@@ -3,4 +3,4 @@ numpy
 screeninfo
 pyserial
 pyapriltags
-#pupil-apriltags
+

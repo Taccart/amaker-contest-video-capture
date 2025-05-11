@@ -1,12 +1,15 @@
-from enum import Enum
 import logging
+from enum import Enum
 from typing import List
+
 import numpy as np
 
 DEFAULT_BOT_COLOR_A = (0, 0, 250)
 DEFAULT_BOT_COLOR_B = (0, 0, 255)
 DEFAULT_TRAIL_COLOR = (0, 0, 250)
 DEFAULT_TRAIL_LENGTH = 20
+
+
 class BotStatus(Enum):
     """Enum for bot states"""
     UNKNOWN = -1
@@ -19,20 +22,28 @@ class BotStatus(Enum):
     STOPPED = 6
     TO_SAFETY = 10
     MISSION_COMPLETED = 20
-class Bot:
+    PANIC = 100
+
+
+class UnleashTheBrickBot:
     """Class to track a bot's position and color (for identification and video feedback)"""
 
-    def __init__(self, name: str = "microbot", id: int = None, color_a=DEFAULT_BOT_COLOR_A, color_b=DEFAULT_BOT_COLOR_B,
+    def __init__(self, tag_id: int, name: str = None,
                  trail_color=DEFAULT_TRAIL_COLOR, trail_length: int = DEFAULT_TRAIL_LENGTH):
         self.name = name
-        self.id = id
-        self.color_a = color_a
-        self.color_b = color_b
+        self.id = tag_id
         self.trail_color = trail_color
         self.trail_length = trail_length
         self.trail = []
         self.status: BotStatus = BotStatus.UNKNOWN
         self.total_distance = 0
+        self.collected = 0
+
+    def add_collected(self, amount: int = 1):
+        self.collected += amount
+
+    def get_collected(self):
+        return self.collected
 
     def add_position(self, position):
         """Add a new position to the bot's trail"""
@@ -40,9 +51,8 @@ class Bot:
         if len(self.trail) > self.trail_length:
             self.trail.pop(0)
         self.total_distance += self.calculate_distance(position)
-        logging.debug(f"bot {self.name}:{self.id}, position: {self.get_last_position()}, total distance: {self.total_distance:.2f}")
 
-    def get_last_position(self) -> tuple|None:
+    def get_last_position(self) -> tuple | None:
         """Get the last known position of the bot"""
         if self.trail:
             return self.trail[-1]
@@ -76,7 +86,7 @@ class Bot:
 
     def get_bot_info(self) -> str:
         """Get bot information"""
-        return f"{self.name}.{self.id}  is {self.get_bot_status()}"
+        return f"Bot {self.name}.{self.id}: Current status: {self.get_bot_status().name}. Declared collected : {self.get_collected()} -total distance: {self.get_total_distance():.2f}"
 
     def __repr__(self):
-        return f"BotTracker(name={self.name}, color_a={self.color_a}, color_b={self.color_b}, trail_color={self.trail_color}, trail_length={self.trail_length})"
+        return f"BotTracker(name={self.name}, id={self.id}, status={self.status}"

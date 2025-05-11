@@ -1,4 +1,4 @@
 venv
 *.avi
 /.idea/
-/amaker/calibration/camera_calibration.npz
+/camera_calibration.npz
