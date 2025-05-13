@@ -5,12 +5,12 @@ from typing import List
 
 import cv2
 import numpy as np
-from pyapriltags import Detector, Detection
 
-from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 # Import SerialManager from the new file
-from amaker.serial_communication.serial_manager import SerialManager
-from unleash_the_brick_ui import AmakerUnleashTheBrickUI
+from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
+from amaker.detection.detector_apriltag import AprilTagDetectorImpl
+from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
+from user_interface import AmakerUnleashTheBrickGUI
 
 ###
 # microbit side:
@@ -33,9 +33,18 @@ CV_THREADS = 4
 
 CAMERA_SEARCH_LIMIT = 10
 WINDOW_TITLE = "aMaker microbot tracker"
-DEFAULT_SCREEN_WIDTH = 1920
-DEFAULT_SCREEN_HEIGHT = 1080
-
+DEFAULT_SCREEN_WIDTH = 1280
+DEFAULT_SCREEN_HEIGHT = 720
+UI_BOT_INFO_FONT_THICKNESS = 2
+UI_BOT_INFO_FONT_COLOR = (255, 0, 0)
+UI_BOT_INFO_FONT_SCALE = 0.6
+UI_BOT_INFO_FONT = cv2.FONT_HERSHEY_SIMPLEX
+UI_BOT_INFO_X = 10
+UI_BOT_INFO_Y = 60
+UI_BOT_INFO_Y_DELTA = 25
+UI_LOG_FONT_COLOR = (128, 128, 128)
+UI_LOG_FONT_THICKNESS = 1
+UI_LOG_FONT_SCALE = 0.8
 COLOR_IGNORED = (255, 255, 255)
 COLOR_WALL = (255, 255, 100)
 COLOR_GROUND = (200, 255, 100)
@@ -46,14 +55,13 @@ VIDEO_FPS = 30.0
 VIDEO_WIDTH = 1920
 VIDEO_HEIGHT = 1080
 APRILTAG_SIZE = 0.1  # Size of the AprilTag in meters
-
 # Key codes
 KEY_ESC = 27
 KEY_CTRL_D = 4
 KEY_Q = ord('q')
 KEY_F = ord('f')
 
-COMMAND_START = "123456789-12345679-123456789-123456789-"
+COMMAND_START = "START"
 COMMAND_STOP = "STOP"
 COMMAND_SAFETY = "SAFETY"
 
@@ -100,36 +108,9 @@ reference_tags = {
 }
 
 
-class AmakerApriltagTracker():
-    """
-    Class to track AprilTags using OpenCV and pyapriltags.
-    """
-    def __init__(self, calibration_file: str = 'camera_calibration.npz', detector_threads: int = 4,
-                 tag_family: str = 'tag36h11'):
-        self.apriltag_detector = Detector(families=tag_family, nthreads=detector_threads, quad_sigma=0.0,
-                                          refine_edges=1, decode_sharpening=0.25, debug=0)
-
-        calibration_data = np.load(calibration_file)
-        self.mtx = calibration_data['camera_matrix']
-        self.dist = calibration_data['dist_coeffs']
-        self.fx = self.mtx[0, 0]
-        self.fy = self.mtx[1, 1]  # Focal length in y direction
-        self.cx = self.mtx[0, 2]  # Principal point x-coordinate (optical center)
-        self.cy = self.mtx[1, 2]  # Principal point y-coordinate (optical center)
-        self.camera_params = [self.fx, self.fy, self.cx, self.cy]
-        self.video_writer = None
-
-    def detect(self, frame, tag_size_cm=10) -> List[Detection]:
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray_undistorted = cv2.undistort(gray, self.mtx, self.dist, None, newCameraMatrix=self.mtx)
-        detected = self.apriltag_detector.detect(gray_undistorted, estimate_tag_pose=True,
-                                                 camera_params=self.camera_params, tag_size=tag_size_cm/100
-                                                 )
-        return detected
-
-
 class AmakerBotTracker():
-    def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: List[UnleashTheBrickBot] = None, serial_manager=None, window_size=(640,480)):
+    def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: List[UnleashTheBrickBot] = None,
+                 serial_manager=None, window_size=(640, 480)):
 
         self.logs = []
         self.max_logs = 5
@@ -144,21 +125,21 @@ class AmakerBotTracker():
         else:
             logging.info("Serial communication not activated.")
 
-
-
-        self.bot_tracker = AmakerApriltagTracker(calibration_file= self.calibration_file  )
-        self.tracked_bots =tracked_bots
+        self.bot_tracker = AprilTagDetectorImpl(calibration_file=self.calibration_file)
+        self.tracked_bots = tracked_bots
         self.camera_index = self.user_input_camera_choice() if camera_index < 0 else camera_index
 
         self.video_capture = cv2.VideoCapture(self.camera_index)
+        self.video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
         cv2.setNumThreads(CV_THREADS)  # Set the number of threads for OpenCV
-        cv2.setLogLevel(2)  # Set OpenCV log severity to no logs
         if not self.video_capture.isOpened():
             raise ValueError(f"Camera {camera_index} not found or cannot be opened.")
-        self.amaker_ui = AmakerUnleashTheBrickUI({}
-                                                 , self._on_UI_BUTTON_start
-                                                 , self._on_UI_BUTTON_stop
-                                                 , self._on_UI_BUTTON_safety())
+        self.amaker_ui = AmakerUnleashTheBrickGUI(config={}
+                                                  , buttons={"start" : self._on_UI_BUTTON_start
+                                                  , "stop":self._on_UI_BUTTON_stop
+                                                  , "safety":self._on_UI_BUTTON_safety})
 
     # Button callback functions
     def _on_UI_BUTTON_start(self):
@@ -166,25 +147,25 @@ class AmakerBotTracker():
 
         if self.serial_manager:
             self.serial_manager.send_command(COMMAND_START)
-            self._add_log(f"sent: {COMMAND_START}")
+            self._add_log(f"> {COMMAND_START} sent")
         else:
-            self._add_log(f"unsent: {COMMAND_START}")
+            self._add_log(f"! {COMMAND_START} failed to send")
 
     def _on_UI_BUTTON_stop(self):
         """Handle stop button click"""
         if self.serial_manager:
             self.serial_manager.send_command(COMMAND_STOP)
-            self._add_log(f"sent: {COMMAND_STOP}")
+            self._add_log(f"> {COMMAND_STOP}")
         else:
-            self._add_log(f"unsent: {COMMAND_STOP}")
+            self._add_log(f"! {COMMAND_STOP} failed to send")
 
     def _on_UI_BUTTON_safety(self):
         """Handle safety button click"""
         if self.serial_manager:
             self.serial_manager.send_command(COMMAND_SAFETY)
-            self._add_log(f"sent: {COMMAND_SAFETY}")
+            self._add_log(f"> {COMMAND_SAFETY}")
         else:
-            self._add_log(f"unsent: {COMMAND_SAFETY}")
+            self._add_log(f"! {COMMAND_SAFETY} failed to send")
 
     def _add_log(self, message):
         current_time = datetime.datetime.now().strftime("%H%M%S")
@@ -203,19 +184,20 @@ class AmakerBotTracker():
     def _update_bot_position(self):
         raise NotImplementedError
 
-    def user_input_camera_choice(self) -> int | None:
+    @staticmethod
+    def user_input_camera_choice() -> int | None:
         """Select a camera from available cameras"""
         index = 0
         available_cameras = []
-        logging.info(f"Searching for cameras...")
+        logging.info(f"Searching for cameras from #0 to #{CAMERA_SEARCH_LIMIT} ...")
         cap = None
         while True:
             try:
                 cap = cv2.VideoCapture(index)
                 if not cap.isOpened():
-                    logging.debug(f"Camera {index} : not ok.")
+                    logging.info(f"Open camera {index} : failed.")
                 else:
-                    logging.info(f"Camera {index} : ok.")
+                    logging.info(f"Open camera {index} : succeeded.")
                     available_cameras.append(index)
 
             except Exception as e:
@@ -238,36 +220,21 @@ class AmakerBotTracker():
         # choose camera to be used 
         print("\nAvailable cameras:")
         for cam in available_cameras:
-            logging.info(f"Camera {cam}")
+            print(f" - Camera {cam}")
 
         selected_camera = int(input("\nSelect the camera index to use: "))
         if selected_camera not in available_cameras:
-            logging.error("Invalid camera index selected!")
+            logging.error("Invalid camera index selected.")
             exit(EXIT_INVALID_CAMERA_CHOICE)
         else:
             return selected_camera
 
-    # def process_bot_tracking(self, frame):
-    #     for bot in self.tracked_bots:
-    #         try:
-    #             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    #             bot_mask = cv2.inRange(rgb, bot.color_a, bot.color_b)
-    #             bot_contours, _ = cv2.findContours(bot_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    #
-    #             if len(bot_contours) > 0:
-    #                 self._update_bot_position(bot, bot_contours, frame)
-    #
-    #             else:
-    #                 logging.debug(f"No contours found for {bot.name}")
-    #         except Exception as e:
-    #             logging.error(f"Error tracking {bot.name}: {e}")
-
-    def setup_video_recording(self, recording: bool = False):
+    def setup_video_recording(self, is_recording: bool, path: str) -> cv2.VideoWriter:
         """Setup video recording"""
-        if recording:
+        if is_recording:
             fourcc = cv2.VideoWriter_fourcc(*VIDEO_CODEC)
             current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            video_name = f'aMaker_microbot_tracker_{current_time}.avi'
+            video_name = f'{path}aMaker_microbot_tracker_{current_time}.avi'
             self.video_writer = cv2.VideoWriter(video_name, fourcc, VIDEO_FPS, (VIDEO_WIDTH, VIDEO_HEIGHT))
             logging.info(f"Video recording started: {video_name}")
         else:
@@ -332,11 +299,12 @@ class AmakerBotTracker():
                         pose_t = tag.pose_t.reshape(3, 1)
 
                         # Create rotation and translation vectors for projection
-                        rvec, _ = cv2.Rodrigues(tag.pose_R)  # Convert rotation matrix to rotation vector
-                        tvec = pose_t
+                        origin_vector, _ = cv2.Rodrigues(tag.pose_R)  # Convert rotation matrix to rotation vector
+                        destination_vector = pose_t
 
                         # Project the 3D points directly with proper rvec and tvec
-                        image_points, _ = cv2.projectPoints(axis_points, rvec, tvec, self.mtx, self.dist)
+                        image_points, _ = cv2.projectPoints(axis_points, origin_vector, destination_vector, self.mtx,
+                                                            self.dist)
                         image_points = np.int32(image_points).reshape(-1, 2)
 
                         # Draw the axes with thicker lines and clear colors
@@ -355,7 +323,7 @@ class AmakerBotTracker():
                     else:
                         logging.error(f"Tag {tag.tag_id} missing pose information")
 
-                    logging.info(f"BOT {tag.tag_id},  T={tag.pose_t} R={tag.pose_R} C={tag.center}")
+                    logging.debug(f"BOT {tag.tag_id},  T={tag.pose_t} R={tag.pose_R} C={tag.center}")
 
 
             else:
@@ -377,38 +345,30 @@ class AmakerBotTracker():
         if self.logs:
             for i, log in enumerate(reversed(self.logs)):
                 y_pos = frame.shape[0] - 30 - (i * 20)
-                cv2.putText(frame, log, (10, y_pos), cv2.FONT_HERSHEY_PLAIN, 1.5, (200, 200, 200), 1)
+                cv2.putText(frame, log, (10, y_pos), cv2.FONT_HERSHEY_PLAIN, UI_LOG_FONT_SCALE, UI_LOG_FONT_COLOR,
+                            UI_LOG_FONT_THICKNESS)
+
+
+    def overlay_bot_infos(self, frame):
+        # Print bots infos
+        for i, bot_tracker in enumerate(self.tracked_bots):
+            y_pos =  UI_BOT_INFO_Y +  (i * UI_BOT_INFO_Y_DELTA)
+            cv2.putText(frame, bot_tracker.get_bot_info()
+                        , (UI_BOT_INFO_X, y_pos)
+                        , UI_BOT_INFO_FONT, UI_BOT_INFO_FONT_SCALE,
+                        UI_BOT_INFO_FONT_COLOR, UI_BOT_INFO_FONT_THICKNESS)
+
 
     def main_tracking_loop(self, window_name, video_writer):
         while True:
             ret, input_frame = self.video_capture.read()
+            input_frame = cv2.resize(input_frame, self.window_size)
             if not ret:
                 logging.error("Failed to capture frame from camera.")
                 break
 
             # Convert to HSV for color detection
             rgb = cv2.cvtColor(input_frame, cv2.COLOR_BGRA2RGB)
-
-            # Draw detected tags
-
-            # TODO HERE the video analysis
-            # for bot_tracker in self.tracked_bots:
-            #     # Get the bot's color range
-            #     bot_mask = cv2.inRange(rgb, bot_tracker.color_a, bot_tracker.color_b)
-            #     bot_contours, _ = cv2.findContours(bot_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            #
-            #     # Extract bot positions
-            #     if bot_contours:
-            #         x, y, w, h = cv2.boundingRect(bot_contours[0])
-            #         bot_position = (x + w // 2, y + h // 2)
-            #         bot_tracker.add_position(bot_position)
-            #
-            #         if len(bot_tracker.get_trail()) > 1:
-            #             cv2.polylines(input_frame, [np.array(bot_tracker.get_trail())], False, bot_tracker.trail_color,
-            #                           2)
-            #             cv2.circle(input_frame, bot_position, 5, bot_tracker.trail_color, -1)
-
-            # Add text to the frame
 
             if video_writer:
                 # Save the frame to the video file
@@ -417,8 +377,8 @@ class AmakerBotTracker():
             # Show the video feed
             detected_tags = self.bot_tracker.detect(input_frame)
             self.overlay_detected_tags(input_frame, detected_tags)
-            scaled_frame = cv2.resize(input_frame, self.window_size)
-            display_frame = self.amaker_ui.build_display_frame(scaled_frame)
+
+            display_frame = self.amaker_ui.build_display_frame(input_frame)
             self.overlay_bot_infos(display_frame)
             self.overlay_logs(display_frame)
 
@@ -428,21 +388,16 @@ class AmakerBotTracker():
             if key == KEY_Q or key == KEY_CTRL_D or key == KEY_ESC:  # 'q' or Ctrl+D or ESC to quit
                 break
 
-    def overlay_bot_infos(self, frame):
-        # Print bots infos
-        for i, bot_tracker in enumerate(self.tracked_bots):
-            y_pos = frame.shape[0] - 30 - (i * 20)
-            cv2.putText(frame, bot_tracker.get_bot_info(), (1090, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                        bot_tracker.trail_color, 2)
-
-    def start_tracking(self, recording: bool = False, window_name=WINDOW_TITLE):
+    def start_tracking(self, recording: bool = False, recording_path: str = ".", window_name=WINDOW_TITLE):
         """Start tracking bots in video feed"""
-        input_frame, original_height, original_width = self.amaker_ui.initialize_window(self.video_capture, window_name,on_start=self._on_UI_BUTTON_start,on_stop=self._on_UI_BUTTON_stop,on_safety=self._on_UI_BUTTON_safety)
+        input_frame, original_height, original_width = self.amaker_ui.initialize_window(self.video_capture, window_name,
+                                                                                        on_start=self._on_UI_BUTTON_start,
+                                                                                        on_stop=self._on_UI_BUTTON_stop,
+                                                                                        on_safety=self._on_UI_BUTTON_safety)
         logging.info(f"Bot trackers: {self.tracked_bots}")
         logging.info(f"Press 'q' or ESC to quit.")
-        logging.info(f"Press 'f' to toggle full screen.")
         try:
-            self.video_writer = self.setup_video_recording(recording)
+            self.video_writer = self.setup_video_recording(recording, path=recording_path)
             self.main_tracking_loop(window_name, self.video_writer)
         except KeyboardInterrupt as e:
             logging.warning(f"Keyboard interruption.")
@@ -473,20 +428,57 @@ class AmakerBotTracker():
 
 
 if __name__ == "__main__":
+
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Unleash the bricks: bots controller')
+
+    parser.add_argument('--window_width', metavar='number', required=False,
+                        help='Window width', type=int, default=DEFAULT_SCREEN_WIDTH)
+    parser.add_argument('--window_height', metavar='number', required=False,
+                        help='Window width', type=int, default=DEFAULT_SCREEN_HEIGHT)
+
+    parser.add_argument('--camera_calibration_file', metavar='path', required=False,
+                        help='Path to camera calibration file', type=str, default='camera_calibration.npz')
+    parser.add_argument('--camera_number', metavar='number', required=True,
+                        help='Camera number. Put -1 to choose in a generated list of accessible ones.', type=int,
+                        default=-1)
+
+    parser.add_argument('--serial_port', metavar='path', required=False,
+                        help='Serial port (ex: /dev/ttyACM0)', type=str, default='/dev/ttyACM0')
+    parser.add_argument('--serial_speed', metavar='number', required=False,
+                        help='Serial port (ex: 57600)', type=int, default=57600)
+
+    parser.add_argument('--record_video', metavar='boolean', required=False,
+                        help='Record the video ', type=bool, default=False)
+    parser.add_argument('--record_video_path', metavar='path', required=False,
+                        help='Video destination path (ex: ./recordings/)', type=str, default='./')
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+    try:
+        # Create serial manager
+        serial_manager = SerialCommunicationManagerImpl(baud_rate=int(args.serial_speed),
+                                                        serial_port=str(args.serial_port))
+        # serial_manager.connect()
 
-    # Create serial manager
-    serial_manager = SerialManager()
-    serial_manager.connect_serial(baud_rate=57600, port="/dev/ttyACM0")
+        # Create video tracker with serial manager
+        tracked_bots = [
+            UnleashTheBrickBot(name="static bot", tag_id=72, trail_color=(0, 255, 0), trail_length=10),
+            UnleashTheBrickBot(name="moving bot ", tag_id=73, trail_color=(0, 255, 0), trail_length=10)]
+        camera_number = args.camera_number
+        if args.camera_number < 0:
+            camera_number = AmakerBotTracker.user_input_camera_choice()
 
-    # Create video tracker with serial manager
-    tracked_bots = [
-        UnleashTheBrickBot(name="bot72", tag_id=72, trail_color=(0, 255, 0), trail_length=10) ]
-    vt = AmakerBotTracker(
-        calibration_file="/home/taccart/VSCode/amaker-path-capture/camera_calibration.npz"
-        , camera_index=4
-        , serial_manager=serial_manager
-        , tracked_bots=tracked_bots
-        , window_size=(1920, 1080))
-    vt.start_tracking(recording=False)
+        vt = AmakerBotTracker(
+            calibration_file=str(args.camera_calibration_file)
+            , camera_index=int(args.camera_number)
+            , serial_manager=serial_manager
+            , tracked_bots=tracked_bots
+            , window_size=(int(args.window_width), int(args.window_height)))
+        vt.start_tracking(recording=bool(args.record_video), recording_path=str(args.record_video_path))
+
+    except Exception as e:
+        logging.error(e)
+        exit(1)

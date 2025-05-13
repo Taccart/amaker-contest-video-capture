@@ -10,14 +10,16 @@ import time
 import serial
 import serial.tools.list_ports
 
+from amaker.communication.communication_abstract import CommunicationManagerAbstract
+
 # Constants for serial communication
 SERIAL_TIMEOUT = 1
-SERIAL_DEFAULT_BAUD_RATE = 115200
+SERIAL_DEFAULT_BAUD_RATE = 57600
 SERIAL_READ_DELAY = 0.01
 THREAD_JOIN_TIMEOUT = 1.0
 
 
-class SerialManager:
+class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
     """Class to manage serial communication"""
 
     def __init__(self, serial_port=None, baud_rate=SERIAL_DEFAULT_BAUD_RATE):
@@ -35,7 +37,7 @@ class SerialManager:
     def initialize_connection(self):
         """Initialize serial connection"""
         try:
-            if not self.connect_serial(self.serial_port, self.baud_rate):
+            if not self.connect():
                 logging.warning("Serial connection not established.")
                 return False
 
@@ -45,7 +47,7 @@ class SerialManager:
             logging.error(f"Failed to connect to serial port: {e}")
             return False
 
-    def list_serial_ports(self):
+    def list_available_channels(self):
         """List all available serial ports"""
         ports = serial.tools.list_ports.comports()
         available_ports = []
@@ -57,10 +59,13 @@ class SerialManager:
 
         return available_ports
 
-    def connect_serial(self, port=None, baud_rate=None):
+    def connect(self, *arg, **kwargs):
         """Connect to a serial port"""
+        port = self.serial_port
+        baud_rate = self.baud_rate
+
         if not port:
-            available_ports = self.list_serial_ports()
+            available_ports = self.list_available_channels()
             if not available_ports:
                 logging.warning("No serial ports available")
                 return False
@@ -74,8 +79,6 @@ class SerialManager:
             except (ValueError, IndexError):
                 logging.error("Invalid selection")
                 return False
-
-        baud_rate = baud_rate or self.baud_rate
 
         try:
             self.serial_connection = serial.Serial(port, baud_rate, timeout=SERIAL_TIMEOUT)
