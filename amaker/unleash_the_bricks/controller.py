@@ -6,9 +6,12 @@ from typing import List
 import cv2
 import numpy as np
 
+from amaker.communication.communication_abstract import CommunicationManagerAbstract
 # Import SerialManager from the new file
 from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
 from amaker.detection.detector_apriltag import AprilTagDetectorImpl
+from amaker.unleash_the_bricks import UI_BGRCOLOR_BLUE_DARK, UI_BGRCOLOR_BLUE_MEDIUM, UI_BGRCOLOR_GREEN_LIGHT, \
+    UI_BGRCOLOR_GREY_LIGHT, UI_BGRCOLOR_BLUE_LIGHT, UI_BGRCOLOR_GREY_MEDIUM
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 from user_interface import AmakerUnleashTheBrickGUI
 
@@ -35,20 +38,21 @@ CAMERA_SEARCH_LIMIT = 10
 WINDOW_TITLE = "aMaker microbot tracker"
 DEFAULT_SCREEN_WIDTH = 1280
 DEFAULT_SCREEN_HEIGHT = 720
+UI_TITLE_COLOR = UI_BGRCOLOR_BLUE_DARK
 UI_BOT_INFO_FONT_THICKNESS = 2
-UI_BOT_INFO_FONT_COLOR = (255, 0, 0)
+UI_BOT_INFO_FONT_COLOR = UI_BGRCOLOR_BLUE_LIGHT
 UI_BOT_INFO_FONT_SCALE = 0.6
 UI_BOT_INFO_FONT = cv2.FONT_HERSHEY_SIMPLEX
 UI_BOT_INFO_X = 10
 UI_BOT_INFO_Y = 60
 UI_BOT_INFO_Y_DELTA = 25
-UI_LOG_FONT_COLOR = (128, 128, 128)
+UI_LOG_FONT_COLOR = UI_BGRCOLOR_BLUE_DARK
 UI_LOG_FONT_THICKNESS = 1
 UI_LOG_FONT_SCALE = 0.8
-COLOR_IGNORED = (255, 255, 255)
-COLOR_WALL = (255, 255, 100)
-COLOR_GROUND = (200, 255, 100)
-COLOR_BOT = (100, 100, 255)
+COLOR_IGNORED = UI_BGRCOLOR_GREY_MEDIUM
+COLOR_WALL = UI_BGRCOLOR_GREY_MEDIUM
+COLOR_GROUND = UI_BGRCOLOR_GREY_LIGHT
+COLOR_BOT = UI_BGRCOLOR_GREEN_LIGHT
 # Video recording constants
 VIDEO_CODEC = 'XVID'
 VIDEO_FPS = 30.0
@@ -109,8 +113,8 @@ reference_tags = {
 
 
 class AmakerBotTracker():
-    def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: List[UnleashTheBrickBot] = None,
-                 serial_manager=None, window_size=(640, 480)):
+    def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: dict[int, UnleashTheBrickBot] = None,
+                 communication_manager=None, window_size=(640, 480)):
 
         self.logs = []
         self.max_logs = 5
@@ -119,14 +123,23 @@ class AmakerBotTracker():
         calibration_data = np.load(calibration_file)
         self.mtx = calibration_data['camera_matrix']
         self.dist = calibration_data['dist_coeffs']
-        self.serial_manager = serial_manager
-        if serial_manager is not None:
+        self.communication_manager = None
+        if communication_manager:
+            if isinstance(communication_manager, CommunicationManagerAbstract):
+                self.communication_manager = communication_manager
+            else:
+                raise TypeError("communication_manager must be an instance of CommunicationManagerAbstract")
+
+        if communication_manager:
             logging.info("Serial communication activated.")
         else:
             logging.info("Serial communication not activated.")
-
+        self.communication_manager.register_on_data_callback(self._on_data_received)
         self.bot_tracker = AprilTagDetectorImpl(calibration_file=self.calibration_file)
-        self.tracked_bots = tracked_bots
+        if isinstance(tracked_bots, dict):
+            self.tracked_bots = tracked_bots
+        else:
+            logging.error("Initialization error : tracked_bots must be a dictionary of int->UnleashTheBrickBot instances")
         self.camera_index = self.user_input_camera_choice() if camera_index < 0 else camera_index
 
         self.video_capture = cv2.VideoCapture(self.camera_index)
@@ -145,44 +158,38 @@ class AmakerBotTracker():
     def _on_UI_BUTTON_start(self):
         """Handle start button click"""
 
-        if self.serial_manager:
-            self.serial_manager.send_command(COMMAND_START)
+        if self.communication_manager:
+            self.communication_manager.send(COMMAND_START)
             self._add_log(f"> {COMMAND_START} sent")
         else:
             self._add_log(f"! {COMMAND_START} failed to send")
 
     def _on_UI_BUTTON_stop(self):
         """Handle stop button click"""
-        if self.serial_manager:
-            self.serial_manager.send_command(COMMAND_STOP)
+        if self.communication_manager:
+            self.communication_manager.send(COMMAND_STOP)
             self._add_log(f"> {COMMAND_STOP}")
         else:
             self._add_log(f"! {COMMAND_STOP} failed to send")
 
     def _on_UI_BUTTON_safety(self):
         """Handle safety button click"""
-        if self.serial_manager:
-            self.serial_manager.send_command(COMMAND_SAFETY)
+        if self.communication_manager:
+            self.communication_manager.send(COMMAND_SAFETY)
             self._add_log(f"> {COMMAND_SAFETY}")
         else:
             self._add_log(f"! {COMMAND_SAFETY} failed to send")
 
+    def _on_data_received (self, data):
+        self._add_log("<"+ data)
+
     def _add_log(self, message):
-        current_time = datetime.datetime.now().strftime("%H%M%S")
+        current_time = datetime.datetime.now().strftime("%H:%M:%S")
         self.logs.append(current_time + " " + str(message))
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
 
-    def bot_assign_colors(self):
-        ## broadcast new colors of all bots
-        raise NotImplementedError
 
-    def bot_verify_colors(self):
-        ## check aknowledgement of new colors for all bots
-        raise NotImplementedError
-
-    def _update_bot_position(self):
-        raise NotImplementedError
 
     @staticmethod
     def user_input_camera_choice() -> int | None:
@@ -242,11 +249,11 @@ class AmakerBotTracker():
 
     def _cleanup_resources(self):
         try:
-            if self.serial_manager:
-                self.serial_manager.close()
-                logging.info("Serial port closed.")
+            if self.communication_manager:
+                self.communication_manager.close()
+                logging.info("Communication closed.")
         except Exception as e:
-            logging.warning(f"Error during serial cleanup: {e}")
+            logging.warning(f"Error during communication cleanup: {e}")
 
         try:
             self.video_capture.release()
@@ -297,7 +304,7 @@ class AmakerBotTracker():
                     if hasattr(tag, 'pose_R') and hasattr(tag, 'pose_t'):
                         # Make sure pose_t is properly shaped
                         pose_t = tag.pose_t.reshape(3, 1)
-
+                        self.tracked_bots[tag.tag_id].add_position(pose_t)
                         # Create rotation and translation vectors for projection
                         origin_vector, _ = cv2.Rodrigues(tag.pose_R)  # Convert rotation matrix to rotation vector
                         destination_vector = pose_t
@@ -351,12 +358,14 @@ class AmakerBotTracker():
 
     def overlay_bot_infos(self, frame):
         # Print bots infos
-        for i, bot_tracker in enumerate(self.tracked_bots):
-            y_pos =  UI_BOT_INFO_Y +  (i * UI_BOT_INFO_Y_DELTA)
-            cv2.putText(frame, bot_tracker.get_bot_info()
-                        , (UI_BOT_INFO_X, y_pos)
-                        , UI_BOT_INFO_FONT, UI_BOT_INFO_FONT_SCALE,
+        i=0
+        for bot_id, bot in self.tracked_bots.items():
+            y_pos = UI_BOT_INFO_Y + (i * UI_BOT_INFO_Y_DELTA)
+            cv2.putText(frame, bot.get_bot_info(),
+                        (UI_BOT_INFO_X, y_pos),
+                        UI_BOT_INFO_FONT, UI_BOT_INFO_FONT_SCALE,
                         UI_BOT_INFO_FONT_COLOR, UI_BOT_INFO_FONT_THICKNESS)
+            i+=1
 
 
     def main_tracking_loop(self, window_name, video_writer):
@@ -366,9 +375,6 @@ class AmakerBotTracker():
             if not ret:
                 logging.error("Failed to capture frame from camera.")
                 break
-
-            # Convert to HSV for color detection
-            rgb = cv2.cvtColor(input_frame, cv2.COLOR_BGRA2RGB)
 
             if video_writer:
                 # Save the frame to the video file
@@ -390,10 +396,8 @@ class AmakerBotTracker():
 
     def start_tracking(self, recording: bool = False, recording_path: str = ".", window_name=WINDOW_TITLE):
         """Start tracking bots in video feed"""
-        input_frame, original_height, original_width = self.amaker_ui.initialize_window(self.video_capture, window_name,
-                                                                                        on_start=self._on_UI_BUTTON_start,
-                                                                                        on_stop=self._on_UI_BUTTON_stop,
-                                                                                        on_safety=self._on_UI_BUTTON_safety)
+        input_frame, original_height, original_width = self.amaker_ui.initialize_window(self.video_capture, window_name
+                                                                                        )
         logging.info(f"Bot trackers: {self.tracked_bots}")
         logging.info(f"Press 'q' or ESC to quit.")
         try:
@@ -410,8 +414,8 @@ class AmakerBotTracker():
     def __del__(self):
         """Destructor cleans up resources"""
         try:
-            if self.serial_manager:
-                self.serial_manager.close()
+            if self.communication_manager:
+                self.communication_manager.close()
         except Exception as e:
             logging.error(f"Error during serial cleanup: {e}")
         try:
@@ -455,18 +459,19 @@ if __name__ == "__main__":
                         help='Video destination path (ex: ./recordings/)', type=str, default='./')
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s')
 
     try:
         # Create serial manager
-        serial_manager = SerialCommunicationManagerImpl(baud_rate=int(args.serial_speed),
+        communication_manager = SerialCommunicationManagerImpl(baud_rate=int(args.serial_speed),
                                                         serial_port=str(args.serial_port))
         # serial_manager.connect()
 
         # Create video tracker with serial manager
-        tracked_bots = [
-            UnleashTheBrickBot(name="static bot", tag_id=72, trail_color=(0, 255, 0), trail_length=10),
-            UnleashTheBrickBot(name="moving bot ", tag_id=73, trail_color=(0, 255, 0), trail_length=10)]
+        tracked_bots = {
+            72: UnleashTheBrickBot(name="static bot", tag_id=72, trail_color=(0, 255, 0), trail_length=10),
+            73: UnleashTheBrickBot(name="moving bot ", tag_id=73, trail_color=(0, 255, 0), trail_length=10)}
+
         camera_number = args.camera_number
         if args.camera_number < 0:
             camera_number = AmakerBotTracker.user_input_camera_choice()
@@ -474,11 +479,10 @@ if __name__ == "__main__":
         vt = AmakerBotTracker(
             calibration_file=str(args.camera_calibration_file)
             , camera_index=int(args.camera_number)
-            , serial_manager=serial_manager
+            , communication_manager=communication_manager
             , tracked_bots=tracked_bots
             , window_size=(int(args.window_width), int(args.window_height)))
         vt.start_tracking(recording=bool(args.record_video), recording_path=str(args.record_video_path))
-
     except Exception as e:
         logging.error(e)
         exit(1)

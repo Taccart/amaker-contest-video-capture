@@ -1,11 +1,10 @@
 import logging
 from enum import Enum
-from typing import List
-
+from typing import List, Tuple, Optional
+from collections import deque
 import numpy as np
 
-DEFAULT_BOT_COLOR_A = (0, 0, 250)
-DEFAULT_BOT_COLOR_B = (0, 0, 255)
+
 DEFAULT_TRAIL_COLOR = (0, 0, 250)
 DEFAULT_TRAIL_LENGTH = 20
 
@@ -35,7 +34,7 @@ class UnleashTheBrickBot:
         self.trail_color = trail_color
         self.trail_length = trail_length
         self.status_history = []
-        self.position_history = []
+        self.position_history = deque(maxlen=trail_length)
         self.status: BotStatus = BotStatus.UNKNOWN
         self.total_distance = 0
         self.collected_count = 0
@@ -46,19 +45,28 @@ class UnleashTheBrickBot:
     def get_collected(self):
         return self.collected_count
 
+
     def add_position(self, position):
         """Add a new position to the bot's trail"""
-        self.position_history.append(position)
-        if len(self.position_history) > self.trail_length:
-            self.position_history.pop(0)
-        self.total_distance += self.calculate_distance(position)
+        previous_pos = self.get_last_position()
 
-    def get_last_position(self) -> tuple | None:
+        if previous_pos is not None:
+            # Only add position if it's different from the previous one
+            if not np.array_equal(position, previous_pos):
+                distance = np.linalg.norm(np.array(previous_pos) - np.array(position))
+                self.total_distance += distance
+                self.position_history.append(position)
+        else:
+            # First position
+            self.position_history.append(position)
+
+
+    def get_last_position(self) -> Optional[Tuple[float, float, float]]:
         """Get the last known position of the bot"""
         if self.position_history:
             return self.position_history[-1]
-        else:
-            return None
+        return None
+
 
     def set_bot_status(self, state: BotStatus):
         """Set the bot's state"""
@@ -69,13 +77,6 @@ class UnleashTheBrickBot:
         """Get the current state of the bot"""
         return self.status
 
-    def calculate_distance(self, position) -> float:
-        """Calculate the distance from the last position to the current position"""
-        if len(self.position_history) < 2:
-            return 0
-        last_position = self.position_history[-2]
-        distance = np.linalg.norm(np.array(position) - np.array(last_position))
-        return distance
 
     def get_total_distance(self) -> float:
         """Get the total distance traveled by the bot"""
@@ -89,6 +90,16 @@ class UnleashTheBrickBot:
         """Get bot information"""
         return (
             f"Bot {self.id:>3}:{self.name:<15}. Status: {self.get_bot_status().name:<8}. Declared collected : {self.get_collected():<3}. Total distance: {self.get_total_distance():.2f}")
+    def _resize_logo(self, target_width):
+        if not self.logo_loaded or self.logo_image is None:
+            return
 
+        logo_scale_factor = target_width / DEFAULT_SCREEN_WIDTH
+        if logo_scale_factor != 1.0:
+            logo_width = int(self.logo_image.shape[1] * logo_scale_factor)
+            logo_height = int(self.logo_image.shape[0] * logo_scale_factor)
+            self.scaled_logo = cv2.resize(self.logo_image, (logo_width, logo_height))
+        else:
+            self.scaled_logo = self.logo_image
     def __repr__(self):
         return f"BotTracker(name={self.name}, id={self.id}, status={self.status}"

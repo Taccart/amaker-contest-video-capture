@@ -6,6 +6,8 @@ Handles all serial port operations in a thread-safe manner.
 import logging
 import threading
 import time
+from queue import Queue
+from typing import Callable
 
 import serial
 import serial.tools.list_ports
@@ -17,20 +19,21 @@ SERIAL_TIMEOUT = 1
 SERIAL_DEFAULT_BAUD_RATE = 57600
 SERIAL_READ_DELAY = 0.01
 THREAD_JOIN_TIMEOUT = 1.0
-
+DEFAULT_MAX_QUEUE_SIZE=100
 
 class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
     """Class to manage serial communication"""
 
-    def __init__(self, serial_port=None, baud_rate=SERIAL_DEFAULT_BAUD_RATE):
+    def __init__(self, serial_port=None, baud_rate=SERIAL_DEFAULT_BAUD_RATE, max_queue_size=DEFAULT_MAX_QUEUE_SIZE):
         """Initialize the serial manager"""
         self.serial_port = serial_port
         self.baud_rate = baud_rate
         self.serial_connection = None
         self.serial_running = False
-        self.serial_data = []
+        self.serial_data = Queue(maxsize=max_queue_size)
         self.serial_thread = None
-
+        self.on_data_received: Callable[[str],None] = None
+        self.callbacks_lock = threading.Lock()
         if serial_port is not None:
             self.initialize_connection()
 
@@ -96,6 +99,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
             self.serial_thread = threading.Thread(target=self.read_serial)
             self.serial_thread.daemon = True
             self.serial_thread.start()
+            self.serial_running = True
             logging.info("Serial thread started")
             return True
         else:
@@ -104,43 +108,73 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
 
     def read_serial(self):
         """Read data from serial port in a separate thread"""
-        self.serial_running = True
+
         while self.serial_running and self.serial_connection and self.serial_connection.is_open:
             try:
                 if self.serial_connection.in_waiting > 0:
                     data = self.serial_connection.readline().decode('utf-8').strip()
                     if data:
-                        self.serial_data.append(data)
-                        logging.debug(f"Data received: {data}")
+                        try:
+                            # Add to queue without blocking (fail if full)
+                            self.serial_data.put_nowait(data)
+                            logging.info(f"Data received: {data}")
+                        except Queue.Full:
+                            logging.error(f"Serial queue full, discarding data: {data}")
+
+                        if self.on_data_received:
+                            self.on_data_received(self.get_next_data())
                 time.sleep(SERIAL_READ_DELAY)  # Small delay to prevent CPU hogging
             except Exception as e:
                 logging.error(f"Serial read error: {e}")
                 break
 
-    def send_command(self, command):
+    def send(self, message):
         """Send a command to the serial port"""
         if self.serial_connection and self.serial_connection.is_open:
             try:
-                self.serial_connection.write(command.encode())
+                self.serial_connection.write(message.encode())
                 self.serial_connection.flush()
-                logging.info(f"Sent command: {command.strip()}")
+                logging.info(f"Sent command: {message.strip()}")
                 return True
             except Exception as e:
                 logging.error(f"Failed to send command: {e}")
                 return False
         else:
-            logging.warning(f"Serial connection not available: message not sent was {command}")
+            logging.warning(f"Serial connection not available: message not sent was {message}")
             return False
 
     def get_next_data(self):
         """Get the next data item from the serial buffer"""
-        if self.serial_data and len(self.serial_data) > 0:
-            return self.serial_data.pop(0)
-        return None
+        try:
+            # Non-blocking get
+            return self.serial_data.get_nowait()
+        except Queue.Empty:
+            return None
 
     def has_data(self):
         """Check if there is data available"""
-        return len(self.serial_data) > 0
+        return self.serial_data.not_empty
+
+    def register_on_data_callback(self, callback):
+        """Register a function to be called when data is received
+        The callback function must accept a single string parameter
+        """
+        if self.on_data_received:
+            logging.warning("Callback already registered, ignoring new one")
+        if callable(callback):
+            with self.callbacks_lock:
+                self.on_data_received=callback
+                return True
+        logging.warning("Callback is not callable: ignoring demand.")
+        return False
+
+    def unregister_on_data_callback(self, callback):
+        """Remove a previously registered callback function"""
+        if self.on_data_received:
+            self.on_data_received = None
+            logging.info("Callback unregistered.")
+        else:
+            logging.info("No callback to unregister.")
 
     def close(self):
         """Close the serial connection"""
