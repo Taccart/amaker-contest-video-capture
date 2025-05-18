@@ -2,3 +2,5 @@ venv
 *.avi
 /.idea/
 /*.npz
+/dist/
+/amaker_unleash_the_bricks.egg-info/

@@ -5,7 +5,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 
 
-DEFAULT_TRAIL_COLOR = (0, 0, 250)
+DEFAULT_COLOR = (0, 0, 250)
 DEFAULT_TRAIL_LENGTH = 50
 
 
@@ -27,14 +27,16 @@ class BotStatus(Enum):
 class UnleashTheBrickBot:
     """Class to track a bot's position and color (for identification and video feedback)"""
 
-    def __init__(self, tag_id: int, name: str = None,
-                 color=DEFAULT_TRAIL_COLOR, trail_length: int = DEFAULT_TRAIL_LENGTH):
+    def __init__(self, bot_id: int, name: str = None,
+                 rgb_color=DEFAULT_COLOR
+                 , trail_length: int = DEFAULT_TRAIL_LENGTH):
         self.name = name
-        self.id = tag_id
-        self.color = color
+        self.id = bot_id
+        self.color = rgb_color
         self.trail_length = trail_length
         self.status_history = []
         self.tag_position_history = []
+        self.trail=[]
         self.status: BotStatus = BotStatus.UNKNOWN
         self.total_distance = 0
         self.collected_count = 0
@@ -84,7 +86,7 @@ class UnleashTheBrickBot:
     def get_bot_info(self) -> str:
         """Get bot information"""
         return (
-            f"#{self.id:>3}:{self.collected_count:>3}/{self.total_distance/100:4.2f} [{self.status.name:<10}] {self.name:<8} ")
+            f"{self.name:>20} [{self.status.name:<10}] {self.collected_count:>3}/{(self.total_distance/100):4.2f}")
 
     def __repr__(self):
         return f"BotTracker(name={self.name}, id={self.id}, status={self.status}"

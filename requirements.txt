@@ -4,3 +4,6 @@ screeninfo
 pyserial
 pyapriltags
 Pillow
+build
+pyqt6-sip
+pyqt6

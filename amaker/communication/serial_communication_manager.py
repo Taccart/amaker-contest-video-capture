@@ -22,7 +22,9 @@ THREAD_JOIN_TIMEOUT = 1.0
 DEFAULT_MAX_QUEUE_SIZE=100
 
 class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
-    """Class to manage serial communication"""
+    """Implementation classs for a  the serial communication manager.
+    Will be used with a microcontroller connected to USB.
+    r"""
 
     def __init__(self, serial_port=None, baud_rate=SERIAL_DEFAULT_BAUD_RATE, max_queue_size=DEFAULT_MAX_QUEUE_SIZE):
         """Initialize the serial manager"""

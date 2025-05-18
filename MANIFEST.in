@@ -1,0 +1,2 @@
+include README.md
+recursive-include amaker/unleash_the_bricks/resources *.jpg *.ttf

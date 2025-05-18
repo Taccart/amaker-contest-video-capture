@@ -8,6 +8,7 @@ import numpy as np
 class CameraCalibration:
     """
     Class to calibrate a camera using chessboard images.
+    To calibrate the camera, you need to provide a set of chessboard images taken from different angles and distances.
     """
 
     def __init__(self, chessboard_images_path: str = './*.jpg', chessboard_size=(10, 7),
