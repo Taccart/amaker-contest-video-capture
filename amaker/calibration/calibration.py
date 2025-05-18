@@ -1,4 +1,5 @@
 import glob
+import argparse
 import logging
 
 import cv2 as cv
@@ -11,8 +12,10 @@ class CameraCalibration:
     To calibrate the camera, you need to provide a set of chessboard images taken from different angles and distances.
     """
 
-    def __init__(self, chessboard_images_path: str = './*.jpg', chessboard_size=(10, 7),
-                 destination_file="camera_calibration.npz", wait_time_ms=250):
+    def __init__(self, chessboard_images_path: str = './*.jpg'
+                 , chessboard_size=(10, 7),
+                     destination_file="camera_calibration.npz"
+                 , wait_time_ms=250):
         logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
         logging.debug("CameraCalibration initialized")
         self.source_images_path = chessboard_images_path
@@ -92,6 +95,45 @@ class CameraCalibration:
             logging.warning("Calibration failed. No chessboard corners were detected.")
 
 
+
+def main():
+    parser = argparse.ArgumentParser(description="Camera calibration script using chessboard images.")
+
+    parser.add_argument('--chessboard_rows',
+                        type=int,
+                        default=10,
+                        help='Number of inner corners per row in the chessboard.')
+    parser.add_argument('--chessboard_cols',
+                        type=int,
+                        default=7,
+                        help='Number of inner corners per column in the chessboard.')
+    parser.add_argument('--square_size',
+                        type=float, default=1.0,
+                        help='Size of a square in your chessboard (in any unit, e.g., mm) (default: 1.0)')
+
+    parser.add_argument('--image_dir', type=str,
+                        default='./calibration_images',
+                        help='Directory containing chessboard images (default: ./calibration_images)')
+    parser.add_argument('--output_file',
+                        type=str,
+                        default='camera_calibration.npz',
+                        help='Path to save the calibration file (default: camera_calibration.npz)')
+
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+      # Import the CameraCalibration class
+
+    # Initialize the CameraCalibration class with parsed arguments
+    calibration = CameraCalibration(
+        chessboard_images_path=f"{args.image_dir}/*.jpg",
+        chessboard_size=(args.chessboard_rows, args.chessboard_cols),
+        destination_file=args.output_file
+    )
+
+    # Perform camera calibration
+    calibration.calibrate_camera(square_size_mm=args.square_size)
+
 if __name__ == "__main__":
-    calibration = CameraCalibration(chessboard_images_path="/home/taccart/Pictures/Webcam/*.jpg")
-    calibration.calibrate_camera(30)
+    main()
