@@ -6,7 +6,7 @@ import numpy as np
 
 
 DEFAULT_COLOR = (0, 0, 250)
-DEFAULT_TRAIL_LENGTH = 50
+DEFAULT_TRAIL_LENGTH = 10
 
 
 class BotStatus(Enum):

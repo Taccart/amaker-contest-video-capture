@@ -7,11 +7,12 @@ import numpy as np
 from amaker.communication.communication_abstract import CommunicationManagerAbstract
 from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
 from amaker.detection.detector_apriltag import AprilTagDetectorImpl
-from amaker.unleash_the_bricks import  UI_RGBCOLOR_GREEN_LIGHT, \
+from amaker.unleash_the_bricks import UI_RGBCOLOR_GREEN_LIGHT, \
     UI_RGBCOLOR_GREY_LIGHT, UI_RGBCOLOR_GREY_MEDIUM, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, UI_RGBCOLOR_GREY_DARK, \
-    WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER
+    WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER, \
+    VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
-from gui_video import AmakerUnleashTheBrickGUI
+from gui_video import AmakerUnleashTheBrickVideo
 
 ###
 # microbit side:
@@ -45,10 +46,7 @@ COLOR_TAG_WALL = UI_RGBCOLOR_GREY_MEDIUM
 COLOR_TAG_GROUND = UI_RGBCOLOR_GREY_LIGHT
 COLOR_TAG_BOT = UI_RGBCOLOR_GREEN_LIGHT
 # Video recording constants
-VIDEO_OUT_CODEC = 'XVID'
-VIDEO_OUT_FPS = 30.0
-VIDEO_OUT_WIDTH = 1280
-VIDEO_OUT_HEIGHT = 720
+
 
 # Key codes
 KEY_ESC = 27
@@ -65,13 +63,18 @@ COMMAND_SAFETY = "SAFETY"
 
 
 class AmakerBotTracker():
-
+    """
+    Class to track the bots using a camera and AprilTag detection.
+    This can be used standalone or embedded in a GUI.
+    Problem with standalone : adding text on video can takes too much time and degrades the video FPS..
+    """
     def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: dict[int, UnleashTheBrickBot] = None,
                  communication_manager=None, window_size=(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT),
-                 know_tags: dict[int, dict] = None):
+                 know_tags: dict[int, dict] = None, max_logs=LOG_MAX_LINES):
+        self._LOG = logging.getLogger(__name__)
         self.reference_tags = know_tags
         self.logs = []
-        self.max_logs = LOG_MAX_LINES
+        self.max_logs = max_logs
         self.window_size = window_size
         self.calibration_file = calibration_file
         calibration_data = np.load(calibration_file)
@@ -86,9 +89,9 @@ class AmakerBotTracker():
                 raise TypeError("communication_manager must be an instance of CommunicationManagerAbstract")
 
         if communication_manager:
-            logging.info("Serial communication activated.")
+            self._LOG.info("Serial communication activated.")
         else:
-            logging.info("Serial communication not activated.")
+            self._LOG.info("Serial communication not activated.")
         self.communication_manager.register_on_data_callback(self._on_data_received)
         self.bot_tracker = AprilTagDetectorImpl(calibration_file=self.calibration_file
                                                 , detector_threads=CV_THREADS
@@ -97,7 +100,7 @@ class AmakerBotTracker():
         if isinstance(tracked_bots, dict):
             self.tracked_bots = tracked_bots
         else:
-            logging.error(
+            self._LOG.error(
                 "Initialization error : tracked_bots must be a dictionary of int->UnleashTheBrickBot instances")
         self.camera_index = self.user_input_camera_choice() if camera_index < 0 else camera_index
 
@@ -109,8 +112,8 @@ class AmakerBotTracker():
 
         if not self.video_capture.isOpened():
             raise ValueError(f"Camera {camera_index} not found or cannot be opened.")
-        self.amaker_ui = AmakerUnleashTheBrickGUI(config={}
-                                                  , buttons={
+        self.amaker_ui = AmakerUnleashTheBrickVideo(config={}
+                                                    , buttons={
                 "start": self._on_UI_BUTTON_start
                 , "stop": self._on_UI_BUTTON_stop
                 , "safety": self._on_UI_BUTTON_safety
@@ -120,23 +123,23 @@ class AmakerBotTracker():
         try:
             if self.communication_manager:
                 self.communication_manager.close()
-                logging.info("Communication closed.")
+                self._LOG.info("Communication closed.")
         except Exception as e:
-            logging.warning(f"Error during communication cleanup: {e}")
+            self._LOG.warning(f"Error during communication cleanup: {e}")
 
         try:
             self.video_capture.release()
-            logging.info("Video capture released.")
+            self._LOG.info("Video capture released.")
         except Exception as e:
-            logging.warning(f"Error during video capture release: {e}")
+            self._LOG.warning(f"Error during video capture release: {e}")
 
         try:
             if self.video_writer and self.video_writer.isOpened():
                 # Release the video writer
                 self.video_writer.release()
-                logging.info("Video writer released successfully.")
+                self._LOG.info("Video writer released successfully.")
         except Exception as e:
-            logging.warning(f"Error during video capture release: {e}")
+            self._LOG.warning(f"Error during video capture release: {e}")
 
     # Button callback functions
     def _on_UI_BUTTON_start(self):
@@ -165,6 +168,8 @@ class AmakerBotTracker():
             self._add_log(f"! {COMMAND_SAFETY} failed to send")
 
     def _on_data_received(self, data):
+        #TODO: make the logic on message received.
+        self._LOG.info(data)
         self._add_log("<" + data)
 
     def _add_log(self, message):
@@ -200,8 +205,8 @@ class AmakerBotTracker():
                     color = UI_COLOR_TAG_GROUND
                 self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color)
             else:
-                logging.debug(f"Tag {tag.tag_id} unknown : not shown. ")
-            logging.debug(f"BOT {tag.tag_id},  T={tag.pose_t} R={tag.pose_R} C={tag.center}")
+                self._LOG.debug(f"Tag {tag.tag_id} unknown : not shown. ")
+            self._LOG.debug(f"BOT {tag.tag_id},  T={tag.pose_t} R={tag.pose_R} C={tag.center}")
 
     @staticmethod
     def user_input_camera_choice() -> int | None:
@@ -256,18 +261,18 @@ class AmakerBotTracker():
             video_name = f'{path}aMaker_microbot_tracker_{current_time}.avi'
             self.video_writer = cv2.VideoWriter(video_name, fourcc, VIDEO_OUT_FPS, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
             if self.video_writer.isOpened():
-                logging.info(f"Video recording started: {video_name}")
+                self._LOG.info(f"Video recording started: {video_name}")
             else:
-                logging.error(f"Video recording not started: {video_name}")
+                self._LOG.error(f"Video recording not started: {video_name}")
         else:
-            logging.info("No video recording.")
+            self._LOG.info("No video recording.")
 
     def main_tracking_loop(self, window_name):
         while True:
             ret, input_frame = self.video_capture.read()
             #input_frame = cv2.resize(input_frame, self.window_size)
             if not ret:
-                logging.error("Failed to capture frame from camera.")
+                self._LOG.error("Failed to capture frame from camera.")
                 break
 
             # Show the video feed
@@ -292,15 +297,15 @@ class AmakerBotTracker():
         """Start tracking bots in video feed"""
         input_frame, original_height, original_width = self.amaker_ui.initialize_window(self.video_capture, window_name
                                                                                         )
-        logging.info(f"Bot trackers: {self.tracked_bots}")
-        logging.info(f"Press 'q' or ESC to quit.")
+        self._LOG.info(f"Bot trackers: {self.tracked_bots}")
+        self._LOG.info(f"Press 'q' or ESC to quit.")
         try:
             self.setup_video_recording(recording, path=recording_path)
             self.main_tracking_loop(window_name)
         except KeyboardInterrupt as e:
-            logging.warning(f"Keyboard interruption.")
+            self._LOG.warning(f"Keyboard interruption.")
         except Exception as e:
-            logging.error(f"Error during video tracking: {e}")
+            self._LOG.error(f"Error during video tracking: {e}")
             raise e
         finally:
             self._cleanup_resources()
@@ -311,18 +316,18 @@ class AmakerBotTracker():
             if self.communication_manager:
                 self.communication_manager.close()
         except Exception as e:
-            logging.error(f"Error during serial cleanup: {e}")
+            self._LOG.error(f"Error during serial cleanup: {e}")
         try:
             if hasattr(self, 'video_capture') and self.video_capture.isOpened():
                 self.video_capture.release()
-                logging.info("Video capture released")
+                self._LOG.info("Video capture released")
         except Exception as e:
-            logging.error(f"Error during capture cleanup: {e}")
+            self._LOG.error(f"Error during capture cleanup: {e}")
         try:
             cv2.destroyAllWindows()
-            logging.info("All windows destroyed")
+            self._LOG.info("All windows destroyed")
         except Exception as e:
-            logging.error(f"Error during winwow cleanup: {e}")
+            self._LOG.error(f"Error during winwow cleanup: {e}")
 
 
 def main():
@@ -363,10 +368,10 @@ def main():
 
         # Create video tracker with serial manager
         tracked_bots_tagId = {
-            71: UnleashTheBrickBot(name="BwT", bot_id=1, rgb_color=UI_RGBCOLOR_ORANGE),
-            72: UnleashTheBrickBot(name="Tesla Cybertruck", bot_id=2, rgb_color=UI_RGBCOLOR_LAVENDER),
-            73: UnleashTheBrickBot(name="Team Rocket", bot_id=3, rgb_color=UI_RGBCOLOR_BRIGHTGREEN),
-            74: UnleashTheBrickBot(name="GEMinator", bot_id=4, rgb_color=UI_RGBCOLOR_HOTPINK),
+            71: UnleashTheBrickBot(name="team alfa", bot_id=1, rgb_color=UI_RGBCOLOR_ORANGE),
+            72: UnleashTheBrickBot(name="team beta", bot_id=2, rgb_color=UI_RGBCOLOR_LAVENDER),
+            73: UnleashTheBrickBot(name="team charly", bot_id=3, rgb_color=UI_RGBCOLOR_BRIGHTGREEN),
+            74: UnleashTheBrickBot(name="team delta", bot_id=4, rgb_color=UI_RGBCOLOR_HOTPINK),
             }
 
         camera_number = args.camera_number
@@ -381,7 +386,6 @@ def main():
             21: {"name": "north_west", type: "ground"},
             22: {"name": "south_east", type: "ground"},
             23: {"name": "south_west", type: "ground"},
-
             30: {"name": "goal", type: "goal"},
             31: {"name": "goal", type: "goal"},
             32: {"name": "goal", type: "goal"},

@@ -1,0 +1,70 @@
+# Unleash the Bricks Configuration
+window:
+  width: 1920
+  height: 1080
+
+camera:
+  calibration_file: "/home/taccart/VSCode/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
+  number: 4  # Use -1 to interactively select from list of available cams
+
+communication:
+  serial_port: "/dev/ttyACM0"
+  serial_speed: 57600
+
+logs:
+  max_count: 20
+
+
+recording:
+  enabled: true
+  path: "/home/taccart/VSCode/amaker-path-capture/amaker/" # Path to save recordings
+
+# tags -> Bot configurations
+known_tags:
+  71:
+    type: "bot"
+    name: "team BwT"
+    color: [255, 165, 0]  # Orange
+  72:
+    type: "bot"
+    name: "team Tesla Cybertruck"
+    color: [230, 230, 250]  # Lavender
+  73:
+    type: "bot"
+    name: "team Rocket"
+    color: [255, 20, 147]  # Deep Pink
+  74:
+    type: "bot"
+    name: "team GEMinator"
+    color: [0, 255, 127]  # Spring Green
+  75:
+    type: "bot"
+    name: "YOUR TEAM !"
+    color: [  0,109,219] # blue
+  10:
+    name: "north"
+    type: "wall"
+  11:
+    name: "east"
+    type: "wall"
+  12:
+    name: "south"
+    type: "wall"
+  13:
+    name: "west"
+    type: "wall"
+  20:
+    name: "north_east"
+    type: "ground"
+  21:
+    name: "north_west"
+    type: "ground"
+  22:
+    name: "south_east"
+    type: "ground"
+  23:
+    name: "south_west"
+    type: "ground"
+  30:
+    name: "goal"
+    type: "goal"

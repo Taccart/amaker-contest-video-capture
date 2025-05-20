@@ -11,11 +11,13 @@ setup(
         "pyserial",
         "pyapriltags",
         "screeninfo",
-
+        "pyqt6-sip",
+        "pyqt6",
+        "pyyaml"
     ],
     entry_points={
         'console_scripts': [
-            'unleash-the-bricks=amaker.unleash_the_bricks.controller:main',
+            'unleash-the-bricks=amaker.unleash_the_bricks.gui_app:main',
         ],
     },
     author="Th.Accart, aMaker club.",

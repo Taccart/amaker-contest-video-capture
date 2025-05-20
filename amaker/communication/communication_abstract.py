@@ -6,10 +6,6 @@ from typing import Callable
 class CommunicationManagerAbstract(ABC):
     """Interface for communication managers"""
 
-    @abstractmethod
-    def initialize_connection(self):
-        """Initialize connection"""
-        pass
 
     @abstractmethod
     def connect(self, *arg, **kwargs):

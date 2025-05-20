@@ -7,3 +7,4 @@ Pillow
 build
 pyqt6-sip
 pyqt6
+pyyaml

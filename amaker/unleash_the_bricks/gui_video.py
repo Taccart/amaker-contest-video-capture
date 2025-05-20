@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
-import importlib
 import logging
 from typing import Callable
 
+import pkg_resources
 from PIL import ImageFont, ImageDraw, Image
 import os
 import cv2
@@ -17,8 +17,8 @@ from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 
 UI_BOT_INFO_FONT_COLOR = UI_RGBCOLOR_WHITE
 UI_BOT_INFO_FONT_NAME = "Doto-Bold"
-UI_BOT_INFO_FONT_SIZE = 20
-UI_BOT_INFO_X = -520
+UI_BOT_INFO_FONT_SIZE = 30
+UI_BOT_INFO_X = 10
 UI_BOT_INFO_Y = -30
 UI_BOT_INFO_Y_DELTA = -25
 UI_BOT_TAG_FONT_NAME="Sixtyfour"
@@ -57,15 +57,16 @@ UI_TITLE_FONT_SCALE = 40
 # UI Messages
 
 
-class AmakerUnleashTheBrickGUI:
+class AmakerUnleashTheBrickVideo:
     """
     Class managing the all the graphic user interface for aMaker microbot tounrament 2025 "Unleash The Bricks"
     """
 
     def __init__(self, config: dict, buttons:dict[str, Callable], max_logs=10, count_down_minutes=5):
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
-        self.logger.debug("UnleashTheBrickUI initialized with config: %s", config)
+        self._LOG = logging.getLogger(__name__)
+        self.is_overlay_logs=False
+
+        self._LOG.debug("UnleashTheBrickUI initialized with config: %s", config)
         self.config = config
         self.count_down_limit=  datetime.now() + timedelta(minutes=count_down_minutes)
         self.window_width=None
@@ -80,15 +81,7 @@ class AmakerUnleashTheBrickGUI:
         self.logo_loaded = False
         self._load_logo()
         fonts_package = "amaker.unleash_the_bricks.resources.fonts"
-        fonts_dir="."
-        try:
-            # For Python 3.9+
-            with importlib.resources.path(fonts_package, "") as fonts_path:
-                fonts_dir = str(fonts_path)
-        except Exception:
-         # Fallback for older Python versions
-            import pkg_resources
-            fonts_dir = pkg_resources.resource_filename(fonts_package, "")
+        fonts_dir =self.get_fonts_directory()
         i=0
         self.is_fullscreen = False
         if config:
@@ -96,8 +89,6 @@ class AmakerUnleashTheBrickGUI:
                 self.is_fullscreen = config["fullscreen"]
 
 
-        self.logs = []
-        self.max_logs = max_logs
         for key, value in buttons.items():
             if not  callable(value):
                 raise ValueError(f"Button action for {key} is not callable.")
@@ -146,20 +137,63 @@ class AmakerUnleashTheBrickGUI:
             "RubikDistressed": os.path.join(fonts_dir, "Rubik_Distressed", "RubikDistressed-Regular.ttf"),
             "SixtyfourConvergence": os.path.join(fonts_dir, "Sixtyfour_Convergence", "SixtyfourConvergence-Regular-VariableFont_BLED,SCAN,XELA,YELA.ttf")
         }
+        kept_fonts= {}
         for font_name, font_path in self.ui_fonts_path.items():
-            if not os.path.exists(font_path):
-                self.logger.warning(f"Font file {font_path} does not exist. Falling back to OpenCV font.")
-                del self.ui_fonts_path[font_name]
+            if  os.path.exists(font_path):
+                kept_fonts[font_name]= font_path
+            else:
+                self._LOG.warning(f"Font not found: {font_path}")
+        self.ui_fonts_path=kept_fonts
 
 
+    def get_fonts_directory(self):
+        """Get the fonts directory in a way that works with regular installs and egg installs"""
+        try:
+            # First attempt: Use importlib.resources (Python 3.7+)
+            import importlib.resources
+            try:
+                # For Python 3.9+
+                with importlib.resources.files('amaker.unleash_the_bricks.resources') as p:
+                    fonts_dir = p / 'fonts'
+                    if fonts_dir.exists():
+                        return str(fonts_dir)
+            except AttributeError:
+                # For Python 3.7-3.8 - not tested
+                try:
+                    with importlib.resources.path('amaker.unleash_the_bricks.resources', 'fonts') as p:
+                        if p.exists():
+                            return str(p)
+                except Exception as e:
+                    self._LOG.warning(f"Could not find fonts using importlib.resources.path: {e}")
+                    pass
+        except ImportError:
+            pass
 
+        # Second attempt: Get the directory from the current file path
+        try:
+            current_file = os.path.abspath(__file__)
+            package_dir = os.path.dirname(current_file)
+            fonts_dir = os.path.join(package_dir, 'resources', 'fonts')
+            if os.path.isdir(fonts_dir):
+                return fonts_dir
+        except Exception:
+            pass
+
+        # Last resort: look for a relative path
+        relative_fonts_dir = os.path.join('amaker', 'unleash_the_bricks', 'resources', 'fonts')
+        if os.path.isdir(relative_fonts_dir):
+            return relative_fonts_dir
+
+        self._LOG.warning("Could not locate fonts directory, using current directory")
+        return "."
 
     def _load_logo(self):
-        self.logo_image = cv2.imread(UI_DEFAULT_IMAGE_MASK, cv2.IMREAD_UNCHANGED)
-        if self.logo_image is None:
-            self.logger.error(f"Failed to load mask image from {UI_DEFAULT_IMAGE_MASK}")
-        else:
-            self.logo_loaded = True
+        pass
+        # self.logo_image = cv2.imread(UI_DEFAULT_IMAGE_MASK, cv2.IMREAD_UNCHANGED)
+        # if self.logo_image is None:
+        #     self.logger.error(f"Failed to load mask image from {UI_DEFAULT_IMAGE_MASK}")
+        # else:
+        #     self.logo_loaded = True
 
     def _resize_logo(self, target_width):
         if not self.logo_loaded or self.logo_image is None:
@@ -202,7 +236,7 @@ class AmakerUnleashTheBrickGUI:
             try:
                 font = ImageFont.truetype(font_path, font_size)
             except Exception as e:
-                self.logger.error(f"Failed to load font {font_name} from {font_path}: {e}")
+                self._LOG.error(f"Failed to load font {font_name} from {font_path}: {e}")
                 return img
 
             # Create a PIL image from the OpenCV image
@@ -369,7 +403,7 @@ class AmakerUnleashTheBrickGUI:
                 cv2.putText(img, "Z", tuple(image_points[3]), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
 
                 # Log axis points for debugging
-                # logging.debug(f"Axis points: Origin={image_points[0]}, X={image_points[1]}, Y={image_points[2]}, Z={image_points[3]}")
+                # self._LOG.debug(f"Axis points: Origin={image_points[0]}, X={image_points[1]}, Y={image_points[2]}, Z={image_points[3]}")
         return img
 
     def ui_add_textlines(self, img, text_lines:list[str], pos_x:int, pos_y:int, y_delta, reverse_lines:bool=False, font_name:str= "text", font_size:int=10, font_color=(255, 255, 255)):
@@ -417,13 +451,13 @@ class AmakerUnleashTheBrickGUI:
             from screeninfo import get_monitors
             monitor = get_monitors()[0]
             self.screen_width, self.screen_height = monitor.width, monitor.height
-            self.logger.info(f"Detected screen size: {self.screen_width}x{self.screen_height}")
+            self._LOG.info(f"Detected screen size: {self.screen_width}x{self.screen_height}")
         except ImportError:
-            self.logger.warning("screeninfo package not installed. Using default screen size.")
+            self._LOG.warning("screeninfo package not installed. Using default screen size.")
             self.screen_width, self.screen_height = DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT
         except Exception as e:
             self.screen_width, self.screen_height = DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT
-            self.logger.warning(f"Couldn't detect screen size. Using defaults: {self.screen_width}x{self.screen_height} ({e})")
+            self._LOG.warning(f"Couldn't detect screen size. Using defaults: {self.screen_width}x{self.screen_height} ({e})")
 
         cv2.namedWindow(window_name, cv2.WINDOW_FULLSCREEN | cv2.WINDOW_KEEPRATIO)
         cv2.setWindowProperty(window_name, cv2.WND_PROP_OPENGL, 1)  # Disable OpenGL status bar
@@ -451,11 +485,10 @@ class AmakerUnleashTheBrickGUI:
                 if (value['x'] <= original_x <= value['x'] + value['w']
                         and value['y'] <= original_y <= value['y'] + value['h']):
                     value['action']()  # Fixed variable name
-                    logging.info(f"Button clicked: {value['text']}", )
+                    self._LOG.info(f"Button clicked: {value['text']}", )
 
 
     def build_display_frame(self, img):
-        # display_frame = input_frame
 
         # Get original dimensions
         original_height, original_width = img.shape[:2]
@@ -501,7 +534,7 @@ class AmakerUnleashTheBrickGUI:
 
 
     def show_logs(self, img, logs):
-        if logs:
+        if not(not (logs is None ) & self.is_overlay_logs):
             self.ui_add_textlines(img=img,
                                   text_lines=logs,
                                   pos_x=UI_LOG_X,
@@ -525,7 +558,7 @@ class AmakerUnleashTheBrickGUI:
             y_pos = UI_BOT_INFO_Y + (i * UI_BOT_INFO_Y_DELTA)
 
             img= self.put_text_ttf(img=img,
-                                        text=bot.get_bot_info(),
+                                        text=bot.name,
                                         position=(UI_BOT_INFO_X, y_pos),
                                         font_name=UI_BOT_INFO_FONT_NAME,
                                         font_size=UI_BOT_INFO_FONT_SIZE,
