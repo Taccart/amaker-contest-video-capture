@@ -117,9 +117,9 @@ class AmakerBotTracker():
             raise ValueError(f"Camera {camera_index} not found or cannot be opened.")
         self.amaker_ui = AmakerUnleashTheBrickVideo(config={}
                                                     , buttons={
-                "start": self._on_UI_BUTTON_start
-                , "stop": self._on_UI_BUTTON_stop
-                , "safety": self._on_UI_BUTTON_safety
+                "start": self.on_UI_BUTTON_start
+                , "stop": self.on_UI_BUTTON_stop
+                , "safety": self.on_UI_BUTTON_safety
             })
 
     def _cleanup_resources(self):
@@ -145,7 +145,7 @@ class AmakerBotTracker():
             self._LOG.warning(f"Error during video capture release: {e}")
 
     # Button callback functions
-    def _on_UI_BUTTON_start(self):
+    def on_UI_BUTTON_start(self):
         """Handle start button click"""
         self.deadline=None
         if self.communication_manager:
@@ -156,7 +156,7 @@ class AmakerBotTracker():
             self._add_log(f"! {COMMAND_START} failed to send")
 
 
-    def _on_UI_BUTTON_stop(self):
+    def on_UI_BUTTON_stop(self):
         """Handle stop button click"""
         self.deadline=None
         if self.communication_manager:
@@ -165,7 +165,7 @@ class AmakerBotTracker():
         else:
             self._add_log(f"! {COMMAND_STOP} failed to send")
 
-    def _on_UI_BUTTON_safety(self):
+    def on_UI_BUTTON_safety(self):
         """Handle safety button click"""
         if self.communication_manager:
             self.communication_manager.send(COMMAND_SAFETY)
