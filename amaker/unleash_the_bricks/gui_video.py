@@ -2,15 +2,14 @@ from datetime import datetime, timedelta
 import logging
 from typing import Callable
 
-import pkg_resources
 from PIL import ImageFont, ImageDraw, Image
 import os
 import cv2
 import numpy as np
 
 from amaker.unleash_the_bricks import UI_RGBCOLOR_BLACK, UI_RGBCOLOR_GREY_DARK, UI_RGBCOLOR_WHITE, \
-    UI_RGBCOLOR_BLUE_DARK, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT,  \
-     WINDOW_TITLE,UI_VIDEO_TITLE
+    UI_RGBCOLOR_BLUE_DARK, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, \
+    WINDOW_TITLE, UI_VIDEO_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_RED, UI_RGBCOLOR_YELLOW
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 
 
@@ -18,11 +17,21 @@ from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 UI_BOT_INFO_FONT_COLOR = UI_RGBCOLOR_WHITE
 UI_BOT_INFO_FONT_NAME = "Doto-Bold"
 UI_BOT_INFO_FONT_SIZE = 30
-UI_BOT_INFO_X = 10
-UI_BOT_INFO_Y = -30
+UI_BOT_INFO_X = 5
+UI_BOT_INFO_Y = -35
 UI_BOT_INFO_Y_DELTA = -25
-UI_BOT_TAG_FONT_NAME="Sixtyfour"
-UI_BOT_TAG_FONT_SIZE=10
+
+UI_COUNT_DOWN_X= -190
+UI_COUNT_DOWN_Y= -70
+UI_COUNT_DOWN_FONT_NAME="Doto-Bold"
+UI_COUNT_DOWN_FONT_SIZE=60
+UI_COUNT_DOWN_COLOR_LONG=UI_RGBCOLOR_YELLOW
+UI_COUNT_DOWN_COLOR_MEDIUM=UI_RGBCOLOR_ORANGE
+UI_COUNT_DOWN_COLOR_SHORT=UI_RGBCOLOR_RED
+UI_COUNT_DOWN_LONG_MINUTES=2
+UI_COUNT_DOWN_MEDIUM_MINUTES=1
+UI_BOT_TAG_FONT_NAME="Doto-Bold"
+UI_BOT_TAG_FONT_SIZE=20
 UI_BOT_TRAIL_WIDTH = 2
 UI_BUTTON_COLOR_PRIMARY = UI_RGBCOLOR_WHITE  # Button fill color
 UI_BUTTON_COLOR_SECONDARY = UI_RGBCOLOR_GREY_DARK  # Button border color
@@ -62,13 +71,12 @@ class AmakerUnleashTheBrickVideo:
     Class managing the all the graphic user interface for aMaker microbot tounrament 2025 "Unleash The Bricks"
     """
 
-    def __init__(self, config: dict, buttons:dict[str, Callable], max_logs=10, count_down_minutes=5):
+    def __init__(self, config: dict, buttons:dict[str, Callable], max_logs=10):
         self._LOG = logging.getLogger(__name__)
         self.is_overlay_logs=False
 
         self._LOG.debug("UnleashTheBrickUI initialized with config: %s", config)
         self.config = config
-        self.count_down_limit=  datetime.now() + timedelta(minutes=count_down_minutes)
         self.window_width=None
         self.window_height=None
         self.screen_width=None
@@ -103,10 +111,6 @@ class AmakerUnleashTheBrickVideo:
             i+=1
         # Load fonts. This should really be improved.
         self.ui_fonts_path = {
-            "RubikGlitch": os.path.join(fonts_dir, "Rubik_Glitch", "RubikGlitch-Regular.ttf"),
-            "Workbench": os.path.join(fonts_dir, "Workbench", "Workbench-Regular-VariableFont_BLED,SCAN.ttf"),
-            "Sixtyfour": os.path.join(fonts_dir, "Sixtyfour", "Sixtyfour-Regular-VariableFont_BLED,SCAN.ttf"),
-            "Audiowide": os.path.join(fonts_dir, "Audiowide", "Audiowide-Regular.ttf"),
             "Doto-Black": os.path.join(fonts_dir, "Doto", "static/Doto-Black.ttf"),
             "Doto_Rounded-Bold": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Bold.ttf"),
             "Doto-Thin": os.path.join(fonts_dir, "Doto", "static/Doto-Thin.ttf"),
@@ -126,16 +130,11 @@ class AmakerUnleashTheBrickVideo:
             "Doto-Bold": os.path.join(fonts_dir, "Doto", "static/Doto-Bold.ttf"),
             "Doto-Light": os.path.join(fonts_dir, "Doto", "static/Doto-Light.ttf"),
             "Doto-VariableFont_ROND,wght": os.path.join(fonts_dir, "Doto", "Doto-VariableFont_ROND,wght.ttf"),
+
             "CutiveMono": os.path.join(fonts_dir, "Cutive_Mono", "CutiveMono-Regular.ttf"),
-            "BungeeSpice": os.path.join(fonts_dir, "Bungee_Spice", "BungeeSpice-Regular.ttf"),
+
             "RubikMoonrocks": os.path.join(fonts_dir, "Rubik_Moonrocks", "RubikMoonrocks-Regular.ttf"),
-            "Bangers": os.path.join(fonts_dir, "Bangers", "Bangers-Regular.ttf"),
-            "AnonymousPro-Bold": os.path.join(fonts_dir, "Anonymous_Pro", "AnonymousPro-Bold.ttf"),
-            "AnonymousPro": os.path.join(fonts_dir, "Anonymous_Pro", "AnonymousPro-Regular.ttf"),
-            "AnonymousPro-Italic": os.path.join(fonts_dir, "Anonymous_Pro", "AnonymousPro-Italic.ttf"),
-            "AnonymousPro-BoldItalic": os.path.join(fonts_dir, "Anonymous_Pro", "AnonymousPro-BoldItalic.ttf"),
-            "RubikDistressed": os.path.join(fonts_dir, "Rubik_Distressed", "RubikDistressed-Regular.ttf"),
-            "SixtyfourConvergence": os.path.join(fonts_dir, "Sixtyfour_Convergence", "SixtyfourConvergence-Regular-VariableFont_BLED,SCAN,XELA,YELA.ttf")
+
         }
         kept_fonts= {}
         for font_name, font_path in self.ui_fonts_path.items():
@@ -295,13 +294,37 @@ class AmakerUnleashTheBrickVideo:
             # Combine foreground and background
             background[y:y + h, x:x + w, :3] = foreground + background_area
 
+    def ui_add_countdown(self, img, deadline:datetime):
+        """
+        Overlay a countdown timer on the frame
+        :param img:
+        :param deadline:
+        :return:
+        """
+        if deadline is None:
+            return
 
+        time_left = deadline - datetime.now()
+        if time_left.total_seconds() <= 0:
+            return img
+
+        countdown_color=UI_COUNT_DOWN_COLOR_LONG if time_left> timedelta(minutes=UI_COUNT_DOWN_LONG_MINUTES) else UI_COUNT_DOWN_COLOR_MEDIUM if time_left> timedelta(minutes=UI_COUNT_DOWN_MEDIUM_MINUTES) else UI_COUNT_DOWN_COLOR_SHORT
+
+        minutes, seconds = divmod(int(time_left.total_seconds()), 60)
+        countdown_text = f"{minutes:02}:{seconds:02}"
+        img=self.put_text_ttf(img=img,
+                              text=countdown_text,
+                              position=(UI_COUNT_DOWN_X , UI_COUNT_DOWN_Y),
+                              font_name=UI_COUNT_DOWN_FONT_NAME,
+                              font_size=UI_COUNT_DOWN_FONT_SIZE,
+                              font_color=countdown_color)
+        return img
     def ui_add_bot(self, amaker_ui, mtx, dist, img, bot: UnleashTheBrickBot):
         """
         Overlay a bot on the frame, with box, trail and head direction
         :param img:
         :param bot:
-        :return:
+        :return
         """
         tag = bot.get_last_tag_position()
         if tag is None:
@@ -311,12 +334,12 @@ class AmakerUnleashTheBrickVideo:
         corners_int = tag.corners.astype(int)
 
         # Add text
-        img= amaker_ui.put_text_ttf(img,
-                                    text=bot.name,
-                                    position=(corners_int[0, 0] + 10, corners_int[0, 1] + 10),
-                                    font_name=UI_BOT_TAG_FONT_NAME,
-                                    font_size=UI_BOT_TAG_FONT_SIZE,
-                                    font_color=bot.color)
+        # img= amaker_ui.put_text_ttf(img,
+        #                             text=bot.name,
+        #                             position=(corners_int[0, 0] + 10, corners_int[0, 1] + 10),
+        #                             font_name=UI_BOT_TAG_FONT_NAME,
+        #                             font_size=UI_BOT_TAG_FONT_SIZE,
+        #                             font_color=bot.color)
         brg_color=(bot.color[2],bot.color[1],bot.color[0])
         # Draw trail more efficiently
         trail = bot.get_trail()
@@ -370,7 +393,7 @@ class AmakerUnleashTheBrickVideo:
                      5)
         cv2.putText(img, label,
                     org=(tag.corners[0, 0].astype(int) + 10, tag.corners[0, 1].astype(int) + 10),
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=color, thickness=1)
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=.8, color=color, thickness=2)
 
         if has_axis:
             # Draw the 3D axes on bot

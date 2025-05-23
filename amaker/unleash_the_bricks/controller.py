@@ -7,10 +7,10 @@ import numpy as np
 from amaker.communication.communication_abstract import CommunicationManagerAbstract
 from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
 from amaker.detection.detector_apriltag import AprilTagDetectorImpl
-from amaker.unleash_the_bricks import UI_RGBCOLOR_GREEN_LIGHT, \
+from amaker.unleash_the_bricks import  \
     UI_RGBCOLOR_GREY_LIGHT, UI_RGBCOLOR_GREY_MEDIUM, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, UI_RGBCOLOR_GREY_DARK, \
     WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER, \
-    VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC
+    VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC, UI_RGBCOLOR_YELLOW
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 from gui_video import AmakerUnleashTheBrickVideo
 
@@ -40,11 +40,12 @@ LOG_MAX_LINES=10
 UI_COLOR_TAG_UNKNOWN = UI_RGBCOLOR_GREY_DARK
 UI_COLOR_TAG_WALL = UI_RGBCOLOR_GREY_LIGHT
 UI_COLOR_TAG_GROUND = UI_RGBCOLOR_GREY_MEDIUM
+UI_COLOR_TAG_GOAL = UI_RGBCOLOR_YELLOW
 
-COLOR_TAG_IGNORED = UI_RGBCOLOR_GREY_MEDIUM
-COLOR_TAG_WALL = UI_RGBCOLOR_GREY_MEDIUM
-COLOR_TAG_GROUND = UI_RGBCOLOR_GREY_LIGHT
-COLOR_TAG_BOT = UI_RGBCOLOR_GREEN_LIGHT
+# COLOR_TAG_IGNORED = UI_RGBCOLOR_GREY_MEDIUM
+# COLOR_TAG_WALL = UI_RGBCOLOR_GREY_MEDIUM
+# COLOR_TAG_GROUND = UI_RGBCOLOR_GREY_LIGHT
+# COLOR_TAG_BOT = UI_RGBCOLOR_GREEN_LIGHT
 # Video recording constants
 
 
@@ -70,11 +71,13 @@ class AmakerBotTracker():
     """
     def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: dict[int, UnleashTheBrickBot] = None,
                  communication_manager=None, window_size=(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT),
-                 know_tags: dict[int, dict] = None, max_logs=LOG_MAX_LINES):
+                 know_tags: dict[int, dict] = None, max_logs=LOG_MAX_LINES, countdown_seconds:int=None):
         self._LOG = logging.getLogger(__name__)
         self.reference_tags = know_tags
         self.logs = []
+        self.countdown_seconds = countdown_seconds
         self.max_logs = max_logs
+        self.deadline:datetime=None
         self.window_size = window_size
         self.calibration_file = calibration_file
         calibration_data = np.load(calibration_file)
@@ -144,15 +147,18 @@ class AmakerBotTracker():
     # Button callback functions
     def _on_UI_BUTTON_start(self):
         """Handle start button click"""
-
+        self.deadline=None
         if self.communication_manager:
             self.communication_manager.send(COMMAND_START)
             self._add_log(f"> {COMMAND_START} sent")
+            self.deadline= None if self.countdown_seconds is None else datetime.datetime.now() + datetime.timedelta(seconds=self.countdown_seconds)
         else:
             self._add_log(f"! {COMMAND_START} failed to send")
 
+
     def _on_UI_BUTTON_stop(self):
         """Handle stop button click"""
+        self.deadline=None
         if self.communication_manager:
             self.communication_manager.send(COMMAND_STOP)
             self._add_log(f"> {COMMAND_STOP}")
@@ -182,7 +188,14 @@ class AmakerBotTracker():
         self.logs.append(current_time + " " + str(message))
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
-
+    def overlay_countdown(self, frame):
+        """
+        Overlay countdown on the frame
+        :param frame:
+        :return:
+        """
+        if self.deadline:
+            self.amaker_ui.ui_add_countdown(self.deadline)
     def overlay_tags(self, frame, tags):
         """
         Overlay detected tags on the frame
@@ -201,9 +214,11 @@ class AmakerBotTracker():
             elif tag.tag_id in self.reference_tags.keys():
                 if self.reference_tags[tag.tag_id]["type"] == "wall":
                     color = UI_COLOR_TAG_WALL
-                if self.reference_tags[tag.tag_id]["type"] == "ground":
+                elif self.reference_tags[tag.tag_id]["type"] == "ground":
                     color = UI_COLOR_TAG_GROUND
-                self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color)
+                elif self.reference_tags[tag.tag_id]["type"] == "goal":
+                    color = UI_COLOR_TAG_GOAL
+                self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color, label=self.reference_tags[tag.tag_id]["name"])
             else:
                 self._LOG.debug(f"Tag {tag.tag_id} unknown : not shown. ")
             self._LOG.debug(f"BOT {tag.tag_id},  T={tag.pose_t} R={tag.pose_R} C={tag.center}")
@@ -278,6 +293,7 @@ class AmakerBotTracker():
             # Show the video feed
             detected_tags = self.bot_tracker.detect(input_frame)
             self.overlay_tags(input_frame, detected_tags)
+            self.overlay_countdown(input_frame)
             self.amaker_ui.show_bot_infos(input_frame, self.tracked_bots)
             self.amaker_ui.show_logs(input_frame, self.logs)
 

@@ -1,8 +1,4 @@
 import time
-
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QWidget, QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPixmap, QImage
 import cv2
 import sys
 import argparse
@@ -10,10 +6,21 @@ import logging
 import os
 import yaml
 from typing import Dict, Any
+
+# PyQt imports - grouped together and explicitly formatted
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QLabel, QVBoxLayout,
+     QWidget, QTextEdit, QTableWidget, QTableWidgetItem,
+    QHeaderView, QDockWidget, QMenuBar
+)
+from PyQt6.QtCore import Qt, QTimer, QSettings
+
+from PyQt6.QtGui import QPixmap, QImage, QAction
 from amaker.unleash_the_bricks.controller import AmakerBotTracker
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
-from amaker.unleash_the_bricks import DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT,    VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT
+from amaker.unleash_the_bricks import DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, \
+    UI_RGBCOLOR_BRIGHTGREEN
 
 # Set environment variable for Qt
 os.environ["QT_QPA_PLATFORM"] = "xcb"
@@ -39,18 +46,33 @@ DEFAULT_WINDOW_BOTS_MAX_SHOWN=6
 
 REFRESH_LOG_MS =200
 REFRESH_TABLE_MS = 200
-class LogsWindow(QMainWindow):
+
+VIDEO_DEFAULT_BOT_COLOR = UI_RGBCOLOR_BRIGHTGREEN
+
+class LogWindow(QDockWidget):
     def __init__(self):
-        super().__init__()
-        self._LOG= logging.getLogger(__name__)
-        self.setWindowTitle("Logs")
+        super().__init__("Logs")
+        self._LOG = logging.getLogger(__name__)
         self.setGeometry(DEFAULT_WINDOW_LOG_X, DEFAULT_WINDOW_LOG_Y, DEFAULT_WINDOW_LOG_WIDHT, DEFAULT_WINDOW_LOG_HEIGHT)
 
-        self.logs_text = QTextEdit(self)
+        # Create a widget to hold the text edit
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+
+        self.logs_text = QTextEdit()
         self.logs_text.setFontFamily("Courier")
         self.logs_text.setFontPointSize(8)
         self.logs_text.setReadOnly(True)
-        self.setCentralWidget(self.logs_text)
+
+        layout.addWidget(self.logs_text)
+        content_widget.setLayout(layout)
+
+        # Set the widget as the dockwidget's content
+        self.setWidget(content_widget)
+
+        # Make the dock widget floatable and closable
+        self.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetFloatable |
+                         QDockWidget.DockWidgetFeature.DockWidgetClosable| QDockWidget.DockWidgetFeature.DockWidgetMovable )
 
     def append_log(self, message):
         self.logs_text.append(message)
@@ -63,71 +85,133 @@ class LogsWindow(QMainWindow):
         else:
             self.logs_text.setText("")
 
-class BotsInfoWindow(QMainWindow):
-    def __init__(self, max_tracked_bots_count:int=DEFAULT_WINDOW_BOTS_MAX_SHOWN):
+class BotsInfoWindow(QDockWidget):
+    def __init__(self):
         super().__init__()
         self.setWindowTitle("Bots")
         self.setGeometry(DEFAULT_WINDOW_BOTS_X, DEFAULT_WINDOW_BOTS_Y, DEFAULT_WINDOW_BOTS_WIDHT, DEFAULT_WINDOW_BOTS_HEIGHT)
-        self.table_widget = QTableWidget(max_tracked_bots_count, 4)  # 4 rows, 4 columns
+        # Initialize with 0 rows, will resize dynamically
+        self.table_widget = QTableWidget(0, 4)
         self.table_widget.setHorizontalHeaderLabels(["Team", "bot state", "distance", "self est. count"])
         self.table_widget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.table_widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)  # Make the table read-only
-        self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)  # Select whole row
-        self.setCentralWidget(self.table_widget)
+        self.table_widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.setWidget(self.table_widget)
+
+        self.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetFloatable |
+                         QDockWidget.DockWidgetFeature.DockWidgetClosable| QDockWidget.DockWidgetFeature.DockWidgetMovable )
+
 
     def update_table(self, bots:list[UnleashTheBrickBot]):
+        current_row_count = self.table_widget.rowCount()
+        bots_count = len(bots)
+
+        if current_row_count != bots_count:
+            self.table_widget.setRowCount(bots_count)
+
         for row, bot in enumerate(bots):
             self.table_widget.setItem(row, 0, QTableWidgetItem(bot.name))
             self.table_widget.setItem(row, 1, QTableWidgetItem(str(bot.status)))
             self.table_widget.setItem(row, 2, QTableWidgetItem(f"{bot.total_distance/100:6.2f}"))
             self.table_widget.setItem(row, 3, QTableWidgetItem(str(bot.collected_count)))
 
+        # Resize window to fit table contents
+        self.resize_window_to_fit_table()
 
+    def resize_window_to_fit_table(self):
+        # Get header height
+        header_height = self.table_widget.horizontalHeader().height()
+
+        # Calculate total row heights
+        row_height = 30  # Default row height
+        total_row_height = 0
+        for i in range(self.table_widget.rowCount()):
+            total_row_height += self.table_widget.rowHeight(i) or row_height
+
+        # Add some padding
+        padding = 40
+
+        # Calculate new height and set it (keeping current width)
+        new_height = header_height + total_row_height + padding
+        current_width = self.width()
+
+        # Set minimum height for empty tables
+        min_height = 100
+        new_height = max(new_height, min_height)
+
+        # Update window size
+        self.resize(current_width, new_height)
 
 class AmakerControllerUI(QMainWindow):
-    def __init__(self,controller: AmakerBotTracker,  max_tracked_bots_count=4 ):
+    def __init__(self, controller: AmakerBotTracker, max_tracked_bots_count=4):
         super().__init__()
         self._LOG = logging.getLogger(__name__)
         self.setWindowTitle("Unleash The Bricks")
         self.setGeometry(DEFAULT_WINDOW_MAIN_X, DEFAULT_WINDOW_MAIN_Y, DEFAULT_WINDOW_MAIN_WIDHT, DEFAULT_WINDOW_MAIN_HEIGHT)
         self.max_tracked_bots_count = max_tracked_bots_count
         self.controller = controller
-        # Main layout
-        central_widget = QWidget()
+
+        # Restore window state if available
+        self.settings = QSettings("AmakerBot", "UnleashTheBricks")
+        if self.settings.contains("mainWindowGeometry"):
+            self.restoreGeometry(self.settings.value("mainWindowGeometry"))
+        if self.settings.contains("mainWindowState"):
+            self.restoreState(self.settings.value("mainWindowState"))
+
+        # Create menu bar : Order and View
+        self.menu = self.menuBar()
+        self.setup_menu_bar(self.menu)
+
+
+        # Create and add dock widgets
+        self.bots_info_window = BotsInfoWindow()
+        self.bots_info_window.setWindowTitle("Bots")
+        self.bots_info_window.setObjectName("bots_info_window")
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.bots_info_window)
+        self.bots_info_window.visibilityChanged.connect(self.toggle_bot_info_action)
+
+        # Create communication logs window (if it doesn't exist)
+        self.comm_logs_window = LogWindow()
+        self.comm_logs_window.setWindowTitle("Communication logs")
+        self.comm_logs_window.setObjectName("communication_logs_window")
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.comm_logs_window)
+        self.comm_logs_window.visibilityChanged.connect(self.toggle_communication_logs)
+
+        self.system_logs_window = LogWindow()
+        self.system_logs_window.setWindowTitle("System logs")
+        self.system_logs_window.setObjectName("system_logs_window")
+          # Hidden by default
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.system_logs_window)
+        self.system_logs_window.visibilityChanged.connect(self.toggle_system_logs_action)
+
+
         main_layout = QVBoxLayout()
 
-        # Title and buttons
-        title_layout = QHBoxLayout()
-        title_label = QLabel("Unleash The Bricks")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_layout.addWidget(title_label)
-
-        start_button = QPushButton("Start")
-        stop_button = QPushButton("Stop")
-        safety_button = QPushButton("Safety")
-        title_layout.addWidget(start_button)
-        title_layout.addWidget(stop_button)
-        title_layout.addWidget(safety_button)
-
-        main_layout.addLayout(title_layout)
+        central_widget = QWidget()
+        central_widget.setLayout(main_layout)
+        self.setCentralWidget(central_widget)
+        #
+        # # Title and buttons
+        # title_layout = QHBoxLayout()
+        # title_label = QLabel("Unleash The Bricks")
+        # title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # title_layout.addWidget(title_label)
+        # start_button = QPushButton("Start")
+        # stop_button = QPushButton("Stop")
+        # safety_button = QPushButton("Safety")
+        # title_layout.addWidget(start_button)
+        # title_layout.addWidget(stop_button)
+        # title_layout.addWidget(safety_button)
+        # main_layout.addLayout(title_layout)
+        # Button actions
+        # start_button.clicked.connect(self.start_button_clicked)
+        # stop_button.clicked.connect(self.stop_button_clicked)
+        # safety_button.clicked.connect(self.safety_button_clicked)
 
         # Video stream
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.video_label)
-
-
-
-        central_widget.setLayout(main_layout)
-        self.setCentralWidget(central_widget)
-
-        # Logs window
-        self.logs_window = LogsWindow()
-        self.logs_window.show()
-
-        # Bots info window
-        self.bots_info_window = BotsInfoWindow()
-        self.bots_info_window.show()
 
         # Video timer
         self.video_timer = QTimer()
@@ -141,15 +225,81 @@ class AmakerControllerUI(QMainWindow):
         self.log_timer = QTimer()
         self.log_timer.timeout.connect(self.update_log)
         self.log_timer.start(REFRESH_LOG_MS)  # Update table every 500ms
-        # Button actions
-        start_button.clicked.connect(self.start_button_clicked)
-        stop_button.clicked.connect(self.stop_button_clicked)
-        safety_button.clicked.connect(self.safety_button_clicked)
 
+    def setup_menu_bar(self, menuBar:QMenuBar):
+
+        self.order_menu = menuBar.addMenu("Order")
+        self.view_menu = menuBar.addMenu("View")
+
+
+        # Add menu actions for dock widgets
+        self.system_logs_action = QAction("System Logs", self)
+        self.system_logs_action.setCheckable(True)
+        self.system_logs_action.setChecked(True)
+        self.system_logs_action.triggered.connect(self.toggle_system_logs_window)
+
+        self.bots_info_action = QAction("Bots table", self)
+        self.bots_info_action.setCheckable(True)
+        self.bots_info_action.setChecked(True)
+        self.bots_info_action.triggered.connect(self.toggle_bots_info_window)
+
+        self.comm_logs_action = QAction("Communication Logs", self)
+        self.comm_logs_action.setCheckable(True)
+        self.comm_logs_action.setChecked(False)
+        self.comm_logs_action.triggered.connect(self.toggle_comm_logs_window)
+
+        # Add actions to view menu
+        self.view_menu.addAction(self.system_logs_action)
+        self.view_menu.addAction(self.bots_info_action)
+        self.view_menu.addAction(self.comm_logs_action)
+
+
+        # Create menu bar (after existing menu bar code)
+
+        # Add menu actions for order controls
+        self.start_action = QAction("Start", self)
+        self.start_action.triggered.connect(self.start_button_clicked)
+        self.order_menu.addAction(self.start_action)
+
+        self.stop_action = QAction("Stop", self)
+        self.stop_action.triggered.connect(self.stop_button_clicked)
+        self.order_menu.addAction(self.stop_action)
+
+        self.safety_action = QAction("Safety", self)
+        self.safety_action.triggered.connect(self.safety_button_clicked)
+        self.order_menu.addAction(self.safety_action)
+
+
+    def toggle_system_logs_window(self):
+        if self.system_logs_window.isVisible():
+            self.system_logs_window.hide()
+        else:
+            self.system_logs_window.show()
+
+    def toggle_bots_info_window(self):
+        if self.bots_info_window.isVisible():
+            self.bots_info_window.hide()
+        else:
+            self.bots_info_window.show()
+
+    def toggle_comm_logs_window(self):
+        if self.comm_logs_window.isVisible():
+            self.comm_logs_window.hide()
+        else:
+            self.comm_logs_window.show()
+
+    def toggle_bot_info_action(self, visible):
+        self.bots_info_action.setChecked(visible)
+
+    def toggle_system_logs_action(self, visible):
+        self.system_logs_action.setChecked(visible)
+
+    def toggle_communication_logs(self,  visible:bool):
+        self.comm_logs_action.setChecked(visible)
 
     def update_log(self):
         if self.controller:
-            self.logs_window.update_text(self.controller.logs)
+            self.comm_logs_window.update_text(self.controller.logs)
 
     def update_frame(self):
         if self.controller:
@@ -159,7 +309,9 @@ class AmakerControllerUI(QMainWindow):
                 detected_tags = self.controller.bot_tracker.detect(frame)
                 self.controller.overlay_tags(frame, detected_tags)
                 self.controller.amaker_ui.show_bot_infos(frame, self.controller.tracked_bots)
-                # self.controller.amaker_ui.show_logs(frame, self.controller.logs)
+
+                self.controller.amaker_ui.ui_add_countdown(frame, self.controller.deadline)
+
 
                 # Convert the frame to QImage and display it
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -202,7 +354,10 @@ class AmakerControllerUI(QMainWindow):
     def closeEvent(self, event):
         if self.controller:
             self.controller._cleanup_resources()
-        self.logs_window.close()
+        # Save the dock widget positions and sizes
+        self.settings = QSettings("AmakerBot", "UnleashTheBricks")
+        self.settings.setValue("mainWindowGeometry", self.saveGeometry())
+        self.settings.setValue("mainWindowState", self.saveState())
         super().closeEvent(event)
 
 def parse_arguments():
@@ -316,7 +471,7 @@ def main():
                 tracked_bots[tag_id] = UnleashTheBrickBot(
                     name=tag_info.get("name", f"Bot {tag_id}"),
                     bot_id=tag_id,
-                    rgb_color=tuple(tag_info.get("color", (0, 0, 255))) if tag_info.get("color") else (0, 0, 255),                )
+                    rgb_color=tuple(tag_info.get("color", VIDEO_DEFAULT_BOT_COLOR)) if tag_info.get("color") else VIDEO_DEFAULT_BOT_COLOR,                )
             else:
                 reference_tags[tag_id] = {
                     "name": tag_info.get("name", ""),
@@ -340,7 +495,9 @@ def main():
             tracked_bots=tracked_bots,
             window_size=(config["window"]["width"], config["window"]["height"]),
             know_tags=reference_tags,
-            max_logs=config["logs"]["max_count"]
+            max_logs=config["logs"]["max_count"],
+            countdown_seconds=config["countdown_second"]
+
         )
 
 
@@ -349,6 +506,7 @@ def main():
 
 
         window.controller.amaker_ui.is_overlay_logs = config["logs"]["show_on_screen"]
+
 
         # Start video timer
         window.video_timer.start(VIDEO_REFRESH_FPS)
