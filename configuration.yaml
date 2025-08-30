@@ -3,70 +3,137 @@ window:
   width: 1920
   height: 1080
 
-countdown_second: 130
+
+
+session_options:
+  countdown_second: 240
+  feed_interval_second: 2
+  participants: # session type = quest when 1 participant, duel when 2 participants, scuffle when 3 or more participants
+   - "Amabot"
+#   - "TEST"
+   - "BridgeTheBricks"
+   - "BwT"
+   - "Geminator"
+   - "RequiemForABot"
+   - "Rocket"
+   - "Terminator"
+   - "TeslaCybertruck"
+
+  video:
+    font-dir: "/home/taccart/development/github_perso/amaker-path-capture/src/amaker/unleash_the_bricks/resources/fonts"
+  ##improve: add a way to show/hide each element in output video
+#    show_walls: false
+#    show_grounds: true
+#    show_bots: true
+#    show_goals: true
+
 
 camera:
-  calibration_file: "/home/taccart/VSCode/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
-  number: 4  # Use -1 to interactively select from list of available cams
+  calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
+  number: 0    # Use -1 to interactively select from list of available cams
 
 communication:
   serial_port: "/dev/ttyACM0"
-  serial_speed: 57600
+  serial_speed: 115200
 
 logs:
   max_count: 20
 
-
 recording:
-  enabled: false
+  enabled: True
   path: "/tmp/" # Path to save recordings
 
 # tags -> Bot configurations
 known_tags:
-  72:
-    type: "bot"
-    name: "team BwT"
-    color: [255, 165, 0]  # Orange
-  73:
-    type: "bot"
-    name: "team Tesla Cybertruck"
-    color: [230, 230, 250]  # Lavender
+  300:
+    name: "East"
+    type: "wall"
+  301:
+    name: "South"
+    type: "wall"
+  302:
+    name: "West"
+    type: "wall"
+  303:
+    name: "North"
+    type: "wall"
+
+  310:
+    name: "South-East"
+    type: "ground"
+  311:
+    name: "South-West"
+    type: "ground"
+  312:
+    name: "North-West"
+    type: "ground"
+  313:
+    name: "North-East"
+    type: "ground"
+
   74:
     type: "bot"
-    name: "team Rocket"
-    color: [  0,109,219] # blue
+    name: "Amabot"
+    color: [230, 25, 75] # RED
+  77:
+    type: "bot"
+    name: "BridgeTheBricks"
+    color: [245, 130, 49]  # ORANGE
+  73:
+    type: "bot"
+    name: "BwT"
+    color:  [255, 225, 25]  # YELLOW
+  78:
+    type: "bot"
+    name: "GEMinator"
+    color: [191, 239, 69] # LIME
+  79:
+    type: "bot"
+    name: "RequiemForABot"
+    color: [60, 180, 75]  # GREEN
   75:
     type: "bot"
-    name: "team GEMinator"
-    color: [0, 255, 127]  # Spring Green
+    name: "Rocket"
+    color: [66, 212, 244] # CYAN
   76:
     type: "bot"
-    name: "YOUR TEAM !"
-    color: [255, 20, 147]  # Deep Pink
-  24:
-    name: "north"
-    type: "wall"
-  25:
-    name: "east"
-    type: "wall"
-  26:
-    name: "south"
-    type: "wall"
-  27:
-    name: "west"
-    type: "wall"
-  48:
-    name: "north_east"
-    type: "ground"
-  49:
-    name: "north_west"
-    type: "ground"
-  50:
-    name: "south_east"
-    type: "ground"
-  51:
-    name: "south_west"
-    type: "ground"
-  96:
-    name: "goal"
+    name: "Terminator"
+    color: [67, 99, 216] # BLUE
+  72:
+    type: "bot"
+    name: "TeslaCybertruck"
+    color: [145, 30, 180]  # PURPLE
+
+  400:
     type: "goal"
+    name: "Amabot"
+    color: [230, 25, 75]    # Red
+  401:
+    type: "goal"
+    name: "BridgeTheBricks"
+    color: [245, 130, 49]   # Orange
+  402:
+    type: "goal"
+    name: "BwT"
+    color: [255, 225, 25]   # Yellow
+  403:
+    type: "goal"
+    name: "Geminator"
+    color: [191, 239, 69]   # Lime
+  404:
+    type: "goal"
+    name: "RequiemForABot"
+    color: [60, 180, 75]    # Green
+  405:
+    type: "goal"
+    name: "Rocket"
+    color: [66, 212, 244]   # Cyan
+  406:
+    type: "goal"
+    name: "Terminator"
+    color: [67, 99, 216]    # Blue
+  407:
+    type: "goal"
+    name: "TeslaCybertruck"
+    color: [145, 30, 180]   # Purple
+
