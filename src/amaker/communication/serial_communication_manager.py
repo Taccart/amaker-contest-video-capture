@@ -1,6 +1,6 @@
 """
 Serial communication manager for aMaker microbot tracker.
-Handles all serial port operations in a thread-safe manner.
+Handles all serial port operations in a feed_thread-safe manner.
 """
 
 import logging
@@ -95,7 +95,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
 
 
     def start_reading(self):
-        """Start the serial reading thread"""
+        """Start the serial reading feed_thread"""
         self._LOG.info ("start reading")
         if not self.serial_connection or not self.serial_connection.is_open:
             self._LOG.error("Cannot start reading: serial connection not open")
@@ -108,16 +108,16 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
         max_wait = 5.0  # Maximum 5 seconds to wait
 
         while not self.serial_thread.is_alive() and time.time() - wait_start < max_wait:
-            self._LOG.info(f"Waiting for thread to start...")
+            self._LOG.info(f"Waiting for feed_thread to start...")
             time.sleep(1)
         if not self.serial_thread.is_alive():
-            self._LOG.error("Serial thread failed to start within timeout")
+            self._LOG.error("Serial feed_thread failed to start within timeout")
             return False
-        self._LOG.info(f"Serial thread started successfully ? {self.serial_thread.is_alive()}")
+        self._LOG.info(f"Serial feed_thread started successfully ? {self.serial_thread.is_alive()}")
         return True
 
     def read_serial(self):
-        """Read data from serial port in a separate thread"""
+        """Read data from serial port in a separate feed_thread"""
         self._LOG.info("read serial")
         while self.serial_connection and self.serial_connection.is_open:
             try:

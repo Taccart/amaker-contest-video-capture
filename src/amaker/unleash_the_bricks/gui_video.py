@@ -31,8 +31,8 @@ UI_COUNT_DOWN_COLOR_SHORT=UI_RGBCOLOR_RED
 UI_COUNT_DOWN_LONG_MINUTES=2
 UI_COUNT_DOWN_MEDIUM_MINUTES=1
 UI_BOT_TAG_FONT_NAME="Doto-Bold"
-UI_BOT_TAG_FONT_SIZE=20
-UI_BOT_TRAIL_WIDTH = 2
+UI_BOT_TAG_FONT_SIZE=52.0
+UI_BOT_TRAIL_WIDTH = 1
 UI_BUTTON_COLOR_PRIMARY = UI_RGBCOLOR_WHITE  # Button fill color
 UI_BUTTON_COLOR_SECONDARY = UI_RGBCOLOR_GREY_DARK  # Button border color
 UI_BUTTON_FONT_COLOR = UI_RGBCOLOR_BLUE_DARK
@@ -89,7 +89,7 @@ class AmakerUnleashTheBrickVideo:
         self.logo_loaded = False
         self._load_logo()
         fonts_package = "amaker.unleash_the_bricks.resources.fonts"
-        fonts_dir =self.get_fonts_directory()
+
         i=0
         self.is_fullscreen = False
         if config:
@@ -109,7 +109,9 @@ class AmakerUnleashTheBrickVideo:
                 , 'clicked': False
                 , 'action' :value}})
             i+=1
-        # Load fonts. This should really be improved.
+        fonts_dir =self.font_dir=config.video.font_dir if "session_options" in config and  "video" in config["session_options"] and "font_dir" in config["session_options"]["video"] else self.get_fonts_directory()
+
+    # Load fonts. TTF are dramatically slow: avoid using them if possible, use a mask image.
         self.ui_fonts_path = {
             "Doto-Black": os.path.join(fonts_dir, "Doto", "static/Doto-Black.ttf"),
             "Doto_Rounded-Bold": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Bold.ttf"),
@@ -145,45 +147,57 @@ class AmakerUnleashTheBrickVideo:
         self.ui_fonts_path=kept_fonts
 
 
+
+    def rgb_to_bgr(self, rgb_color):
+        """
+        Convert RGB color to BGR format for OpenCV
+        :param rgb_color: tuple of (R, G, B)
+        :return: tuple of (B, G, R)
+        """
+        if not isinstance(rgb_color, tuple) or len(rgb_color) != 3:
+            self._LOG.warning("rgb_to_bgr argument was not a tuple of (R, G, B)")
+            return rgb_color
+        return (rgb_color[2], rgb_color[1], rgb_color[0])
+
     def get_fonts_directory(self):
         """Get the fonts directory in a way that works with regular installs and egg installs"""
-        try:
-            # First attempt: Use importlib.resources (Python 3.7+)
-            import importlib.resources
-            try:
-                # For Python 3.9+
-                with importlib.resources.files('amaker.unleash_the_bricks.resources') as p:
-                    fonts_dir = p / 'fonts'
-                    if fonts_dir.exists():
-                        return str(fonts_dir)
-            except AttributeError:
-                # For Python 3.7-3.8 - not tested
-                try:
-                    with importlib.resources.path('amaker.unleash_the_bricks.resources', 'fonts') as p:
-                        if p.exists():
-                            return str(p)
-                except Exception as e:
-                    self._LOG.warning(f"Could not find fonts using importlib.resources.path: {e}")
-                    pass
-        except ImportError:
-            pass
-
-        # Second attempt: Get the directory from the current file path
-        try:
-            current_file = os.path.abspath(__file__)
-            package_dir = os.path.dirname(current_file)
-            fonts_dir = os.path.join(package_dir, 'resources', 'fonts')
-            if os.path.isdir(fonts_dir):
-                return fonts_dir
-        except Exception:
-            pass
-
-        # Last resort: look for a relative path
-        relative_fonts_dir = os.path.join('amaker', 'unleash_the_bricks', 'resources', 'fonts')
-        if os.path.isdir(relative_fonts_dir):
-            return relative_fonts_dir
-
-        self._LOG.warning("Could not locate fonts directory, using current directory")
+        # try:
+        #     # First attempt: Use importlib.resources (Python 3.7+)
+        #     import importlib.resources
+        #     try:
+        #         # For Python 3.9+
+        #         with importlib.resources.files('amaker.unleash_the_bricks.resources') as p:
+        #             fonts_dir = p / 'fonts'
+        #             if fonts_dir.exists():
+        #                 return str(fonts_dir)
+        #     except AttributeError:
+        #         # For Python 3.7-3.8 - not tested
+        #         try:
+        #             with importlib.resources.path('amaker.unleash_the_bricks.resources', 'fonts') as p:
+        #                 if p.exists():
+        #                     return str(p)
+        #         except Exception as e:
+        #             self._LOG.warning(f"Could not find fonts using importlib.resources.path: {e}")
+        #             pass
+        # except ImportError:
+        #     pass
+        #
+        # # Second attempt: Get the directory from the current file path
+        # try:
+        #     current_file = os.path.abspath(__file__)
+        #     package_dir = os.path.dirname(current_file)
+        #     fonts_dir = os.path.join(package_dir, 'resources', 'fonts')
+        #     if os.path.isdir(fonts_dir):
+        #         return fonts_dir
+        # except Exception:
+        #     pass
+        #
+        # # Last resort: look for a relative path
+        # relative_fonts_dir = os.path.join('amaker', 'unleash_the_bricks', 'resources', 'fonts')
+        # if os.path.isdir(relative_fonts_dir):
+        #     return relative_fonts_dir
+        #
+        # self._LOG.warning("Could not locate fonts directory, using current directory")
         return "."
 
     def _load_logo(self):
@@ -226,8 +240,7 @@ class AmakerUnleashTheBrickVideo:
             y=img.shape[0] + y
         if not (font_name in self.ui_fonts_path):
             # Fall back to OpenCV font if TTF not available
-            cv2.putText(img, text, (x,y), cv2.FONT_HERSHEY_SIMPLEX,
-                        font_size/20, font_color, thickness=1)
+            cv2.putText(img, text, (int(x),int(y)), cv2.FONT_HERSHEY_SIMPLEX,  0.75 , self.rgb_to_bgr(font_color), thickness=2)
             return img
         else:
             # Load the font
@@ -239,11 +252,11 @@ class AmakerUnleashTheBrickVideo:
                 return img
 
             # Create a PIL image from the OpenCV image
-            pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            pil_img = img #Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
             draw = ImageDraw.Draw(pil_img)
 
             # Draw the text
-            draw.text((x,y), text, font=font, fill=font_color)
+            draw.text((x,y), text, font=font, fill=self.rgb_to_bgr(font_color))
 
             # Convert back to OpenCV format
             result=cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
@@ -334,13 +347,8 @@ class AmakerUnleashTheBrickVideo:
         corners_int = tag.corners.astype(int)
 
         # Add text
-        # img= amaker_ui.put_text_ttf(img,
-        #                             text=bot.name,
-        #                             position=(corners_int[0, 0] + 10, corners_int[0, 1] + 10),
-        #                             font_name=UI_BOT_TAG_FONT_NAME,
-        #                             font_size=UI_BOT_TAG_FONT_SIZE,
-        #                             font_color=bot.color)
-        brg_color=(bot.color[2],bot.color[1],bot.color[0])
+
+
         # Draw trail more efficiently
         trail = bot.get_trail()
         if trail and len(trail) > 1:
@@ -348,12 +356,14 @@ class AmakerUnleashTheBrickVideo:
             centers = np.array([t.center.astype(int) for t in trail])
             # Draw lines in one loop
             for i in range(len(centers) - 1):
-                cv2.line(img, tuple(centers[i]), tuple(centers[i + 1]), brg_color, UI_BOT_TRAIL_WIDTH)
+                cv2.line(img, tuple(centers[i]), tuple(centers[i + 1]), self.rgb_to_bgr(bot.color), UI_BOT_TRAIL_WIDTH)
 
         # Draw tag corners
-        for idx in range(len(corners_int)):
-            if idx!=2:
-                cv2.line(img, tuple(corners_int[idx - 1]), tuple(corners_int[idx]), brg_color, 5)
+        # for idx in range(len(corners_int)):
+        #     #if idx!=2:
+        #         cv2.line(img, tuple(corners_int[idx - 1]), tuple(corners_int[idx]), self.rgb_to_bgr(bot.color), 5)
+        cv2.line(img, tuple(corners_int[3]), tuple(corners_int[0]), self.rgb_to_bgr(bot.color), 5)
+        # cv2.line(img, tuple(corners_int[3]), tuple(corners_int[2]), self.rgb_to_bgr(bot.color), 5)
 
         # Only compute 3D axes if needed and tag has pose information
         if hasattr(tag, 'pose_R') and hasattr(tag, 'pose_t'):
@@ -372,9 +382,18 @@ class AmakerUnleashTheBrickVideo:
             image_points = np.int32(image_points).reshape(-1, 2)
 
             # Draw only the necessary axis line
-            origin = tuple(image_points[0])
-            cv2.line(img, origin, tuple(image_points[1]), brg_color, 3)  # X-axis only
 
+            bot.set_screen_info(position= image_points[0], direction=image_points[1] - image_points[0])  # Set screen position and direction
+            # cv2.line(img, origin, tuple(image_points[1]), self.rgb_to_bgr(bot.color), 3)  # X-axis only
+            cv2.line(img, corners_int[0], tuple(image_points[1]), self.rgb_to_bgr(bot.color), 3)  # X-axis only
+            cv2.line(img, corners_int[3], tuple(image_points[1]), self.rgb_to_bgr(bot.color), 3)  # X-axis only
+            # useless: bot name are already shown on screen
+            # img= amaker_ui.put_text_ttf(img,
+            #                             text=bot.name,
+            #                             position=origin,
+            #                             font_name="UI_BOT_TAG_FONT_NAME",
+            #                             font_size=UI_BOT_TAG_FONT_SIZE,
+            #                             font_color=(255,255,255))
         return img
 
 
@@ -388,6 +407,7 @@ class AmakerUnleashTheBrickVideo:
         :param has_axis:
         :return:
         """
+        brg=(color[2],color[1],color[0])
         for idx in range(len(tag.corners)):
             cv2.line(img, tuple(tag.corners[idx - 1, :].astype(int)), tuple(tag.corners[idx, :].astype(int)), color,
                      5)
@@ -585,7 +605,7 @@ class AmakerUnleashTheBrickVideo:
                                         position=(UI_BOT_INFO_X, y_pos),
                                         font_name=UI_BOT_INFO_FONT_NAME,
                                         font_size=UI_BOT_INFO_FONT_SIZE,
-                                        font_color=bot.color)
+                                        font_color=bot.color )
 
 
             i += 1

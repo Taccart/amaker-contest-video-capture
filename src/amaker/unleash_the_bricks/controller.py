@@ -1,9 +1,11 @@
 import datetime
 import logging
 import os
+import time
 import cv2
 import numpy as np
-
+from threading import Thread
+from queue import Queue
 from amaker.communication.communication_abstract import CommunicationManagerAbstract
 from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
 from amaker.detection.detector_apriltag import AprilTagDetectorImpl
@@ -14,11 +16,12 @@ from amaker.unleash_the_bricks import  \
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 from gui_video import AmakerUnleashTheBrickVideo
 
+
 ###
 # microbit side:
 # at start : button A to scroll radio group, A+B save radio group
 #
-# thread sends heartbeats every X seconds
+# feed_thread sends heartbeats every X seconds
 # listen on channel
 # lib => main() to s
 
@@ -56,6 +59,7 @@ KEY_Q = ord('q')
 KEY_F = ord('f')
 
 COMMAND_START = "START"
+COMMAND_INFO = "INFO"
 COMMAND_STOP = "STOP"
 COMMAND_SAFETY = "SAFETY"
 
@@ -69,14 +73,16 @@ class AmakerBotTracker():
     This can be used standalone or embedded in a GUI.
     Problem with standalone : adding text on video can takes too much time and degrades the video FPS..
     """
+    #TODO : use kwargs instead of many parameters
     def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: dict[int, UnleashTheBrickBot] = None,
                  communication_manager=None, window_size=(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT),
-                 know_tags: dict[int, dict] = None, max_logs=LOG_MAX_LINES, countdown_seconds:int=None):
+                 know_tags: dict[int, dict] = None, max_logs=LOG_MAX_LINES, countdown_seconds:int=None, info_feed_interval_second: int=None, **kwarg):
         self._LOG = logging.getLogger(__name__)
         self.reference_tags = know_tags
         self.logs = []
         self.countdown_seconds = countdown_seconds
         self.max_logs = max_logs
+
         self.deadline:datetime=None
         self.window_size = window_size
         self.calibration_file = calibration_file
@@ -90,7 +96,12 @@ class AmakerBotTracker():
                 self.communication_manager = communication_manager
             else:
                 raise TypeError("communication_manager must be an instance of CommunicationManagerAbstract")
+        self.feed_interval = info_feed_interval_second
+        self.feed_enabled = self.feed_interval > 0
+        self.feed_running = False
 
+        self.feed_thread = None
+        self.feed_message_queue = Queue()
         if communication_manager:
             self._LOG.info("Serial communication activated.")
         else:
@@ -101,7 +112,7 @@ class AmakerBotTracker():
                                                 ,tag_size_cm=3
                                                 ,)
         if isinstance(tracked_bots, dict):
-            self.tracked_bots = tracked_bots
+            self.tracked_bots : dict[int, UnleashTheBrickBot] = tracked_bots
         else:
             self._LOG.error(
                 "Initialization error : tracked_bots must be a dictionary of int->UnleashTheBrickBot instances")
@@ -115,6 +126,7 @@ class AmakerBotTracker():
 
         if not self.video_capture.isOpened():
             raise ValueError(f"Camera {camera_index} not found or cannot be opened.")
+
         self.amaker_ui = AmakerUnleashTheBrickVideo(config={}
                                                     , buttons={
                 "start": self.on_UI_BUTTON_start
@@ -122,7 +134,71 @@ class AmakerBotTracker():
                 , "safety": self.on_UI_BUTTON_safety
             })
 
+
+    def feed_start_thread(self):
+        if not self.feed_enabled:
+            return
+        self.feed_running = True
+        self.feed_thread = Thread(target=self.feed_reporting_loop)
+        self.feed_thread.daemon = True
+        self.feed_thread.start()
+
+    def feed_stop_thread(self):
+        """Stop the periodic information feed thread safely"""
+        if not hasattr(self, 'feed_thread') or self.feed_thread is None:
+            return
+
+        self.feed_running = False
+        try:
+            # Give the thread a chance to exit gracefully
+            if self.feed_thread.is_alive():
+                self.feed_thread.join(timeout=2.0)
+
+            # If thread still alive after timeout, log a warning
+            if self.feed_thread.is_alive():
+                self._LOG.warning("Feed thread did not terminate gracefully within timeout")
+        except Exception as e:
+            self._LOG.warning(f"Error while stopping feed thread: {e}")
+
+        self.feed_thread = None
+
+    def feed_reporting_loop(self):
+        while self.feed_running :
+            self.feed_enqueue()
+            time.sleep(self.feed_interval)
+
+    def feed_enqueue(self):
+        """Prepare tag info data and queue it for sending in main feed_thread"""
+        feed_data = []
+        # Collect data from all tracked bots
+        for bot_id, bot_info in self.tracked_bots.items():
+            feed_data.append( bot_info.get_bot_info_compressed())
+
+        # Queue the message for sending
+        try:
+            self.feed_message_queue.put(COMMAND_INFO+" "+ "|".join(feed_data))
+
+        except Exception as e:
+            self._LOG.warning(f"Error prepating feed data: {e}")
+
+
+
+    def process_pending_feed_messages(self):
+        """Call this method from the main feed_thread periodically"""
+        while not self.feed_message_queue.empty():
+            message = self.feed_message_queue.get()
+            self.communication_manager.send(message)
+            self._add_log(f"> sent  {message}")
+        pass
+
     def _cleanup_resources(self):
+        try:
+            if hasattr(self, 'feed_running') and self.feed_running:
+                self.feed_stop_thread()
+                self._LOG.info("Periodic information feed thread stopped.")
+        except Exception as e:
+            self._LOG.warning(f"Error stopping feed thread: {e}")
+
         try:
             if self.communication_manager:
                 self.communication_manager.close()
@@ -148,6 +224,7 @@ class AmakerBotTracker():
     def on_UI_BUTTON_start(self):
         """Handle start button click"""
         self.deadline=None
+        self.feed_start_thread()
         if self.communication_manager:
             self.communication_manager.send(COMMAND_START)
             self._add_log(f"> {COMMAND_START} sent")
@@ -159,6 +236,7 @@ class AmakerBotTracker():
     def on_UI_BUTTON_stop(self):
         """Handle stop button click"""
         self.deadline=None
+        self.feed_stop_thread()
         if self.communication_manager:
             self.communication_manager.send(COMMAND_STOP)
             self._add_log(f"> {COMMAND_STOP}")
@@ -227,7 +305,7 @@ class AmakerBotTracker():
     def user_input_camera_choice() -> int | None:
         """Select a camera from available cameras"""
         index = 0
-        available_cameras = []
+        available_cameras = {}
         logging.info(f"Searching for cameras from #0 to #{CAMERA_SEARCH_LIMIT} ...")
         cap = None
         while True:
@@ -236,11 +314,12 @@ class AmakerBotTracker():
                 if not cap.isOpened():
                     logging.info(f"Open camera {index} : failed.")
                 else:
-                    logging.info(f"Open camera {index} : succeeded.")
-                    available_cameras.append(index)
+                    logging.info(f"Open camera {index} ({cap.getBackendName()}): succeeded.")
+                    available_cameras[index]= cap.getBackendName()
+
 
             except Exception as e:
-                logging.warning(f"Camera {index}: error {e}")
+                logging.info(f"Camera {index}: error {e}")
             finally:
                 try:
                     if cap:
@@ -259,7 +338,7 @@ class AmakerBotTracker():
         # choose camera to be used 
         print("\nAvailable cameras:")
         for cam in available_cameras:
-            print(f" - Camera {cam}")
+            print(f" - Camera {cam} ({available_cameras[cam]})")
 
         selected_camera = int(input("\nSelect the camera index to use: "))
         if selected_camera not in available_cameras:
@@ -300,6 +379,7 @@ class AmakerBotTracker():
             self.amaker_ui.build_display_frame(input_frame)
 
             cv2.imshow(window_name, input_frame)
+            self.periodic_reporter.process_pending_messages()
             if self.video_writer and self.video_writer.isOpened():
                 # Save the frame to the video file
                 video_out = cv2.resize(input_frame, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
@@ -350,7 +430,7 @@ def main():
 
     import argparse
 
-    parser = argparse.ArgumentParser(description='Unleash the bricks: bots controller')
+    parser = argparse.ArgumentParser(description='Unleash the bricks: bots controller core - for test only')
 
     parser.add_argument('--window_width', metavar='number', required=False,
                         help='Window width', type=int, default=DEFAULT_SCREEN_WIDTH)
@@ -358,7 +438,7 @@ def main():
                         help='Window width', type=int, default=DEFAULT_SCREEN_HEIGHT)
 
     parser.add_argument('--camera_calibration_file', metavar='path', required=False,
-                        help='Path to camera calibration file', type=str, default='camera_calibration.npz')
+                        help='Path to camera calibration file', type=str, default='TALogitechHDWebcamB910_calibration.npz')
     parser.add_argument('--camera_number', metavar='number', required=True,
                         help='Camera number. Put -1 to choose in a generated list of accessible ones.', type=int,
                         default=-1)
@@ -384,7 +464,7 @@ def main():
 
         # Create video tracker with serial manager
         tracked_bots_tagId = {
-            71: UnleashTheBrickBot(name="team alfa", bot_id=1, rgb_color=UI_RGBCOLOR_ORANGE),
+            71: UnleashTheBrickBot(name="team alpha", bot_id=1, rgb_color=UI_RGBCOLOR_ORANGE),
             72: UnleashTheBrickBot(name="team beta", bot_id=2, rgb_color=UI_RGBCOLOR_LAVENDER),
             73: UnleashTheBrickBot(name="team charly", bot_id=3, rgb_color=UI_RGBCOLOR_BRIGHTGREEN),
             74: UnleashTheBrickBot(name="team delta", bot_id=4, rgb_color=UI_RGBCOLOR_HOTPINK),
@@ -417,7 +497,7 @@ def main():
         vt.start_tracking(recording=bool(args.record_video), recording_path=str(args.record_video_path))
     except Exception as e:
         logging.error(e)
-        exit(1)
+        raise e
 
 
 if __name__ == "__main__":

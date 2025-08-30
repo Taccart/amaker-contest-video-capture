@@ -14,7 +14,7 @@ class AprilTagDetectorImpl(DetectorAbstract):
     Class to track AprilTags using OpenCV and pyapriltags.
     """
 
-    def __init__(self, calibration_file: str = 'camera_calibration.npz', detector_threads: int = 4,
+    def __init__(self, calibration_file: str = 'TALogitechHDWebcamB910_calibration.npz', detector_threads: int = 4,
                  tag_family: str = 'tag36h11', *args, **kwargs):
         self.apriltag_detector = Detector(families=tag_family, nthreads=detector_threads, quad_sigma=0.0,
                                           refine_edges=1, decode_sharpening=0.25, debug=0)

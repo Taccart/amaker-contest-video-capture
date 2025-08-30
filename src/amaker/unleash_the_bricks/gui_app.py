@@ -24,7 +24,7 @@ from amaker.unleash_the_bricks.controller import AmakerBotTracker
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 #
-VIDEO_REFRESH_FPS = 30
+VIDEO_REFRESH_FPS = 20
 
 DEFAULT_WINDOW_MAIN_X = 100
 DEFAULT_WINDOW_MAIN_Y = 100
@@ -172,7 +172,7 @@ class AmakerControllerUI(QMainWindow):
         self.setGeometry(DEFAULT_WINDOW_MAIN_X, DEFAULT_WINDOW_MAIN_Y, DEFAULT_WINDOW_MAIN_WIDHT,
                          DEFAULT_WINDOW_MAIN_HEIGHT)
         self.max_tracked_bots_count = max_tracked_bots_count
-        self.controller = controller
+        self.controller: AmakerBotTracker = controller
 
 
 
@@ -215,6 +215,7 @@ class AmakerControllerUI(QMainWindow):
             self.restoreGeometry(self.settings.value("mainWindowGeometry"))
         if self.settings.contains("mainWindowState"):
             self.restoreState(self.settings.value("mainWindowState"))
+
     def setup_docking_windows(self):
 
         # Create and add dock widgets
@@ -331,16 +332,18 @@ class AmakerControllerUI(QMainWindow):
 
     def update_frame(self):
         if self.controller:
+
             ret, frame = self.controller.video_capture.read()
             if ret:
                 # Process the frame using the controller
                 detected_tags = self.controller.bot_tracker.detect(frame)
                 self.controller.overlay_tags(frame, detected_tags)
                 # deactivate bots infos to fasten frame
-                # self.controller.amaker_ui.show_bot_infos(frame, self.controller.tracked_bots)
+                self.controller.amaker_ui.show_bot_infos(frame, self.controller.tracked_bots)
 
                 self.controller.amaker_ui.ui_add_countdown(frame, self.controller.deadline)
 
+                self.controller.process_pending_feed_messages()
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 height, width, channel = frame.shape
                 step = channel * width
@@ -351,6 +354,11 @@ class AmakerControllerUI(QMainWindow):
                     # Save the frame to the video file
                     video_out = cv2.resize(frame, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
                     self.controller.video_writer.write(video_out)
+                try:
+                    self.controller.process_pending_feed_messages()
+                except Exception as e:
+                    self._LOG.error(f"Error processing feed messages: {e}")
+
 
     def update_table(self):
         if self.controller and hasattr(self.controller, 'tracked_bots'):
@@ -403,9 +411,9 @@ def load_and_validate_config(config_file: str) -> Dict[str, Any]:
 
         # Define default values
         defaults = {"window": {"width": DEFAULT_SCREEN_WIDTH, "height": DEFAULT_SCREEN_HEIGHT},
-                    "camera": {"calibration_file": "camera_calibration.npz", "number": -1},
+                    "camera": {"calibration_file": "TALogitechHDWebcamB910_calibration.npz", "number": -1},
                     "communication": {"serial_port": "/dev/ttyACM0", "serial_speed": 57600},
-                    "recording": {"enabled": False, "path": "./"}, "logs": {"max_count": 10, "show_on_screen": False}}
+                    "recording": {"feed_enabled": False, "path": "./"}, "logs": {"max_count": 10, "show_on_screen": False}}
         if "logs" not in config:
             config["logs"] = {}
         config["logs"]["max_count"] = config["logs"].get("max_count", defaults["logs"]["max_count"])
@@ -438,7 +446,7 @@ def load_and_validate_config(config_file: str) -> Dict[str, Any]:
             if "path" not in config["recording"]:
                 config["recording"]["path"] = defaults["recording"]["path"]
 
-        config["recording"]["enabled"] = config["recording"].get("enabled", defaults["recording"]["enabled"])
+        config["recording"]["feed_enabled"] = config["recording"].get("feed_enabled", defaults["recording"]["feed_enabled"])
         config["recording"]["path"] = config["recording"].get("path", defaults["recording"]["path"])
 
         return config
@@ -472,7 +480,8 @@ def main():
             tag_id = int(tag_id_str)
             tag_type = tag_info.get("type", "")
 
-            if tag_type == "bot":
+            if tag_type == "bot" and tag_info.get("name") in config["session_options"]["participants"]:
+
                 tracked_bots[tag_id] = UnleashTheBrickBot(name=tag_info.get("name", f"Bot {tag_id}"), bot_id=tag_id,
                                                           rgb_color=tuple(tag_info.get("color",
                                                                                        VIDEO_DEFAULT_BOT_COLOR)) if tag_info.get(
@@ -492,7 +501,7 @@ def main():
                                       communication_manager=communication_manager, tracked_bots=tracked_bots,
                                       window_size=(config["window"]["width"], config["window"]["height"]),
                                       know_tags=reference_tags, max_logs=config["logs"]["max_count"],
-                                      countdown_seconds=config["countdown_second"]
+                                      countdown_seconds=config["session_options"]["countdown_second"], info_feed_interval_second= config["session_options"]["feed_interval_second"]
 
                                       )
 
@@ -508,8 +517,8 @@ def main():
         # Show the window
         window.show()
 
-        # Configure video recording if enabled
-        if config["recording"]["enabled"]:
+        # Configure video recording if feed_enabled
+        if config["recording"]["feed_enabled"]:
             if config["recording"]["path"]:
                 if os.path.isdir(config["recording"]["path"]):
                     window.controller.setup_video_recording(True, config["recording"]["path"])
