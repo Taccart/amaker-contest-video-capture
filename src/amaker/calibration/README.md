@@ -1,16 +1,19 @@
 # Camera calibration
 The application uses OpenCV for video capture and processing.
-OpenCV requires a camera calibration to be fully operational. Read more information at [docs.opencv.org: tutorial py calibration](https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html)
+OpenCV requires a camera calibration to be fully operational. 
+Read more information at [docs.opencv.org: tutorial py calibration](https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html)
 
-To run the calibration, print the chessboard pattern and take multiple pictures of it with your camera, under different angles and distances.
+To run the calibration, print the chessboard pattern [chessboard 7x9 with 20x20 mm squares.pdf](./chessboard 7x9 with 20x20 mm squares.pdf)
+and take multiple pictures of it with your camera, under many angles and distances.
 
 ***********************************************************************************
-           IT'S MANDATORY TO HAVE THE CHESSBOARD PRINTED SHEET FLAT AND WITHOUT ANY FOLDS.
+IT'S MANDATORY TO HAVE THE CHESSBOARD PRINTED SHEET FLAT AND WITHOUT ANY FOLDS.
 ***********************************************************************************
 
 
-The calibration.py script will create a file called camera_calibration.npz with the camera matrix and distortion coefficients.
-This file will be used by the main.py script to undistort images taken with THIS PARTICULAR CAMERA.
+The calibration.py script will create a .npz file with the camera matrix and distortion coefficients.
+
+This file will be used to undistort images taken with THIS PARTICULAR CAMERA.
 
 
 
@@ -27,6 +30,18 @@ The calibration script supports the following command-line arguments:
 | `--output_file`        | Path to save the calibration file                | String  | `camera_calibration.npz` |
 
 ### Example Usage
-
+Show help message:
 ```bash
-python calibration.py --chessboard_rows 10 --chessboard_cols 7 --square_size 25.0 --image_dir ./images --output_file camera_calibration.npz
+python calibration.py -h
+```
+
+Run calibration with default parameters corresponding to chessboard 7x9 with 20x20 mm squares (as in given pdf):
+```bash
+python calibration.py
+```
+
+`
+Run calibration with specific parameters:
+```bash
+python calibration.py --chessboard_rows 7 --chessboard_cols 5 --square_size 25.0 --image_dir ./my_image_dir --output_file my.npz
+```
