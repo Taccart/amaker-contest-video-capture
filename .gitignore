@@ -1,5 +1,6 @@
 venv
+.venv
 *.avi
 /.idea/
 /dist/
-/amaker_unleash_the_bricks.egg-info/
+**/amaker_unleash_the_bricks.egg-info/

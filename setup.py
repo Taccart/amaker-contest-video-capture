@@ -3,7 +3,8 @@ from setuptools import setup, find_packages
 setup(
     name="amaker-unleash-the-bricks",
     version="0.1.0",
-    packages=find_packages(),
+    package_dir={"": "src"},
+    packages=find_packages(where="src"),
     install_requires=[
         "numpy",
         "opencv-python",
@@ -22,7 +23,7 @@ setup(
     },
     author="Th.Accart, aMaker club.",
     description="aMaker microbot tournament controller.",
-    python_requires=">=3.6",
+    python_requires=">=3.9",
     include_package_data=True,
     package_data={
         "amaker.unleash_the_bricks": ["resources/fonts/**/*.ttf", "resources/fonts/**/*.otf"]
