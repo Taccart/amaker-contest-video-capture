@@ -30,7 +30,7 @@ session_options:
 
 camera:
   calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
-  number: 0    # Use -1 to interactively select from list of available cams
+  number: 4    # Use -1 to interactively select from list of available cams
 
 communication:
   serial_port: "/dev/ttyACM0"

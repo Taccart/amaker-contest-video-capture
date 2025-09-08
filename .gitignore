@@ -4,3 +4,4 @@ venv
 /.idea/
 /dist/
 **/amaker_unleash_the_bricks.egg-info/
+**/__pycache__

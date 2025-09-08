@@ -9,7 +9,7 @@ from queue import Queue
 from amaker.communication.communication_abstract import CommunicationManagerAbstract
 from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
 from amaker.detection.detector_apriltag import AprilTagDetectorImpl
-from amaker.unleash_the_bricks import  \
+from amaker.unleash_the_bricks import \
     UI_RGBCOLOR_GREY_LIGHT, UI_RGBCOLOR_GREY_MEDIUM, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, UI_RGBCOLOR_GREY_DARK, \
     WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER, \
     VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC, UI_RGBCOLOR_YELLOW
@@ -106,7 +106,6 @@ class AmakerBotTracker():
             self._LOG.info("Serial communication activated.")
         else:
             self._LOG.info("Serial communication not activated.")
-        self.communication_manager.register_on_data_callback(self._on_data_received)
         self.bot_tracker = AprilTagDetectorImpl(calibration_file=self.calibration_file
                                                 , detector_threads=CV_THREADS
                                                 ,tag_size_cm=3
@@ -273,7 +272,7 @@ class AmakerBotTracker():
         :return:
         """
         if self.deadline:
-            self.amaker_ui.ui_add_countdown(self.deadline)
+            self.amaker_ui.ui_add_countdown(frame, self.deadline)
     def overlay_tags(self, frame, tags):
         """
         Overlay detected tags on the frame
@@ -335,7 +334,7 @@ class AmakerBotTracker():
             logging.error("No cameras found!")
             exit(EXIT_NO_CAMERA)
 
-        # choose camera to be used 
+        # choose camera to be used
         print("\nAvailable cameras:")
         for cam in available_cameras:
             print(f" - Camera {cam} ({available_cameras[cam]})")
@@ -369,6 +368,13 @@ class AmakerBotTracker():
                 self._LOG.error("Failed to capture frame from camera.")
                 break
 
+            # Process incoming serial data
+            if self.communication_manager:
+                while self.communication_manager.has_data():
+                    data = self.communication_manager.get_next_data()
+                    if data:
+                        self._on_data_received(data)
+
             # Show the video feed
             detected_tags = self.bot_tracker.detect(input_frame)
             self.overlay_tags(input_frame, detected_tags)
@@ -379,7 +385,7 @@ class AmakerBotTracker():
             self.amaker_ui.build_display_frame(input_frame)
 
             cv2.imshow(window_name, input_frame)
-            self.periodic_reporter.process_pending_messages()
+            self.process_pending_feed_messages()
             if self.video_writer and self.video_writer.isOpened():
                 # Save the frame to the video file
                 video_out = cv2.resize(input_frame, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
@@ -468,7 +474,7 @@ def main():
             72: UnleashTheBrickBot(name="team beta", bot_id=2, rgb_color=UI_RGBCOLOR_LAVENDER),
             73: UnleashTheBrickBot(name="team charly", bot_id=3, rgb_color=UI_RGBCOLOR_BRIGHTGREEN),
             74: UnleashTheBrickBot(name="team delta", bot_id=4, rgb_color=UI_RGBCOLOR_HOTPINK),
-            }
+        }
 
         camera_number = args.camera_number
         if args.camera_number < 0:

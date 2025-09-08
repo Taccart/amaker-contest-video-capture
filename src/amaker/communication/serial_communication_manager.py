@@ -33,7 +33,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
         self.serial_port = serial_port
         self.baud_rate = baud_rate
 
-        self.serial = None
+        self.serial :Serial = None
 
 
         self.serial_connection = None
@@ -43,6 +43,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
 
         self.callbacks_lock = threading.Lock()
         self.connect()  # Add explicit connection
+        self.start_reading()
         time.sleep(0.2)
 
 
@@ -83,7 +84,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
 
         try:
             self.serial_connection = serial.Serial(port, baud_rate, timeout=SERIAL_TIMEOUT)
-            self._LOG.info(f"Connected to {port} at {baud_rate} baud")
+            self._LOG.info(f"Connected to {port} at {baud_rate} baud - {self.serial_connection}")
             self.serial_port = port
             self.baud_rate = baud_rate
             if not self.serial_connection.is_open:
@@ -129,8 +130,6 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
                             self.serial_data.put_nowait(data)
                         except queue.Full:  # Use queue.Full, not Queue.Full
                             self._LOG.error(f"Serial queue full, discarding data: {data}")
-                        if self.on_data_received:
-                            self.on_data_received(data)  # Pass data directly, not get_next_data()
                 time.sleep(SERIAL_READ_DELAY)
             except Exception as e:
                 self._LOG.error(f"Serial read error: {str(e)}")
@@ -140,6 +139,8 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
         """Send a command to the serial port"""
         if self.serial_connection and self.serial_connection.is_open:
             try:
+                if not(message.endswith('\n')):
+                    message = message +'\n'
                 self.serial_connection.write(message.encode())
                 self.serial_connection.flush()
                 self._LOG.info(f"Sent command: {message.strip()}")
