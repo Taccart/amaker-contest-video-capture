@@ -14,6 +14,7 @@ from amaker.unleash_the_bricks import \
     WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER, \
     VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC, UI_RGBCOLOR_YELLOW
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
+from amaker.unleash_the_bricks.controller_bridge import MessageType, RadioMessage, CommandEnum
 from gui_video import AmakerUnleashTheBrickVideo
 
 
@@ -61,7 +62,7 @@ KEY_F = ord('f')
 COMMAND_START = "START"
 COMMAND_INFO = "INFO"
 COMMAND_STOP = "STOP"
-COMMAND_SAFETY = "SAFETY"
+COMMAND_DANGER = "DANGER"
 
 
 # Bot tracker constants
@@ -80,6 +81,7 @@ class AmakerBotTracker():
         self._LOG = logging.getLogger(__name__)
         self.reference_tags = know_tags
         self.logs = []
+        self.communication_logs=[]
         self.countdown_seconds = countdown_seconds
         self.max_logs = max_logs
 
@@ -167,18 +169,20 @@ class AmakerBotTracker():
             time.sleep(self.feed_interval)
 
     def feed_enqueue(self):
+        return
+
         """Prepare tag info data and queue it for sending in main feed_thread"""
-        feed_data = []
-        # Collect data from all tracked bots
-        for bot_id, bot_info in self.tracked_bots.items():
-            feed_data.append( bot_info.get_bot_info_compressed())
-
-        # Queue the message for sending
-        try:
-            self.feed_message_queue.put(COMMAND_INFO+" "+ "|".join(feed_data))
-
-        except Exception as e:
-            self._LOG.warning(f"Error prepating feed data: {e}")
+        # feed_data = []
+        ##Collect data from all tracked bots
+        # for bot_id, bot_info in self.tracked_bots.items():
+        #     feed_data.append( bot_info.get_bot_info_compressed())
+        #
+        # # Queue the message for sending
+        # try:
+        #     self.feed_message_queue.put(COMMAND_INFO+" "+ "|".join(feed_data))
+        #
+        # except Exception as e:
+        #     self._LOG.warning(f"Error prepating feed data: {e}")
 
 
 
@@ -245,10 +249,10 @@ class AmakerBotTracker():
     def on_UI_BUTTON_safety(self):
         """Handle safety button click"""
         if self.communication_manager:
-            self.communication_manager.send(COMMAND_SAFETY)
-            self._add_log(f"> {COMMAND_SAFETY}")
+            self.communication_manager.send(COMMAND_DANGER)
+            self._add_log(f"> {COMMAND_DANGER}")
         else:
-            self._add_log(f"! {COMMAND_SAFETY} failed to send")
+            self._add_log(f"! {COMMAND_DANGER} failed to send")
 
     def _on_data_received(self, data):
         #TODO: make the logic on message received.
@@ -265,6 +269,18 @@ class AmakerBotTracker():
         self.logs.append(current_time + " " + str(message))
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
+
+    def _add_communication_log(self, message):
+        """
+        Add a log message to the logs list (keeping a limit on the number of lines)
+        :param message:
+        :return:
+        """
+        current_time = datetime.datetime.now().strftime("%H:%M:%S")
+        self.communication_logs.append(current_time + " " + str(message))
+        if len(self.communication_logs) > self.max_logs:
+            self.communication_logs.pop(0)
+
     def overlay_countdown(self, frame):
         """
         Overlay countdown on the frame
@@ -381,6 +397,7 @@ class AmakerBotTracker():
             self.overlay_countdown(input_frame)
             self.amaker_ui.show_bot_infos(input_frame, self.tracked_bots)
             self.amaker_ui.show_logs(input_frame, self.logs)
+            self.amaker_ui.show_communication_logs(input_frame, self.communication_logs)
 
             self.amaker_ui.build_display_frame(input_frame)
 

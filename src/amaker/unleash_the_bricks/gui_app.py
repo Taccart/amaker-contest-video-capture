@@ -209,6 +209,9 @@ class AmakerControllerUI(QMainWindow):
         self.log_timer.timeout.connect(self.update_log)
         self.log_timer.start(REFRESH_LOG_MS)  # Update table every 500ms
 
+        self.communication_log_timer = QTimer()
+        self.communication_log_timer.timeout.connect(self.update_communication_log)
+        self.communication_log_timer.start(REFRESH_LOG_MS)  # Update table every 500
         # Restore window state if available
         self.settings = QSettings("AmakerBot", "UnleashTheBricks")
         if self.settings.contains("mainWindowGeometry"):
@@ -314,6 +317,15 @@ class AmakerControllerUI(QMainWindow):
 
     def toggle_communication_logs(self, visible: bool):
         self.comm_logs_action.setChecked(visible)
+
+    def update_communication_log (self):
+        if self.controller:
+            while True:
+                data = self.controller.communication_manager.get_next_data()
+                if data is None:
+                    break
+                self.controller._add_communication_log(data)
+            self.comm_logs_window.update_text(self.controller.communication_logs)
 
     def update_log(self):
         if self.controller:
