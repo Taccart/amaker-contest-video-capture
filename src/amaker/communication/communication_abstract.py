@@ -32,7 +32,7 @@ class CommunicationManagerAbstract(ABC):
         pass
 
     @abstractmethod
-    def has_data(self):
+    def has_data(self)->bool :
         """Check if there is data available"""
         pass
 
