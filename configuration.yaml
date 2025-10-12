@@ -9,18 +9,15 @@ session_options:
   countdown_second: 240
   feed_interval_second: 2
   participants: # session type = quest when 1 participant, duel when 2 participants, scuffle when 3 or more participants
-   - "Amabot"
-#   - "TEST"
-   - "BridgeTheBricks"
+   - "AmaBot"
+   - "BridgeTheBrick"
    - "BwT"
-   - "Geminator"
+   - "GEMinator"
    - "RequiemForABot"
-   - "Rocket"
+   - "TeamRocket"
    - "Terminator"
    - "TeslaCybertruck"
 
-  video:
-    font-dir: "/home/taccart/development/github_perso/amaker-path-capture/src/amaker/unleash_the_bricks/resources/fonts"
   ##improve: add a way to show/hide each element in output video
 #    show_walls: false
 #    show_grounds: true
@@ -30,7 +27,7 @@ session_options:
 
 camera:
   calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
-  number: -1    # Use -1 to interactively select from list of available cams
+  number: 0    # Use -1 to interactively select from list of available cams
 
 communication:
   serial_port: "/dev/ttyACM0"
@@ -73,11 +70,11 @@ known_tags:
 
   74:
     type: "bot"
-    name: "Amabot"
+    name: "AmaBot"
     color: [230, 25, 75] # RED
   77:
     type: "bot"
-    name: "BridgeTheBricks"
+    name: "BridgeTheBrick"
     color: [245, 130, 49]  # ORANGE
   73:
     type: "bot"

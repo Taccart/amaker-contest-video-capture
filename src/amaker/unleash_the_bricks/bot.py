@@ -31,6 +31,7 @@ class UnleashTheBrickBot:
                  rgb_color=DEFAULT_COLOR
                  , trail_length: int = DEFAULT_TRAIL_LENGTH):
         self.name = name
+        self.card=""
         self.id = bot_id
         self.color = rgb_color
         self.trail_length = trail_length
@@ -42,6 +43,9 @@ class UnleashTheBrickBot:
         self.collected_count = 0
         self.screen_position =None # X,Y of center
         self.screen_direction =None # X,Y of direction vector
+
+    def set_card(self, card: str):
+        self.card = card
 
     def set_screen_info(self, position: Tuple[int, int], direction: Tuple[int, int]):
         self.screen_position = (int(position[0]),int(position[1]))

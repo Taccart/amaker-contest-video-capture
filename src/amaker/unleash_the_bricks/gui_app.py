@@ -14,7 +14,7 @@ from PyQt6.QtGui import QPixmap, QImage, QAction, QColor
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QTextEdit, QTableWidget,
                              QTableWidgetItem, QHeaderView, QDockWidget, QMenuBar, QSizePolicy)
 
-from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
+from amaker.communication.communication_serial import SerialCommunicationManagerImpl
 from amaker.unleash_the_bricks import DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, \
     UI_RGBCOLOR_BRIGHTGREEN
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
@@ -97,9 +97,9 @@ class BotsDockWidget(QDockWidget):
         self.setGeometry(DEFAULT_WINDOW_BOTS_X, DEFAULT_WINDOW_BOTS_Y, DEFAULT_WINDOW_BOTS_WIDHT,
                          DEFAULT_WINDOW_BOTS_HEIGHT)
         # Initialize with 0 rows, will resize dynamically
-        self.table_widget = QTableWidget(0, 5)
+        self.table_widget = QTableWidget(0, 6)
         self.table_widget.verticalHeader().setVisible(False)
-        self.table_widget.setHorizontalHeaderLabels(["Team", "bot state", "distance", "self est. count", ""])
+        self.table_widget.setHorizontalHeaderLabels(["Team", "card","bot state", "distance", "self est. count", ""])
         self.table_widget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table_widget.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table_widget.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -117,14 +117,15 @@ class BotsDockWidget(QDockWidget):
 
         for row, bot in enumerate(bots):
             self.table_widget.setItem(row, 0, QTableWidgetItem(bot.name))
-            self.table_widget.setItem(row, 1, QTableWidgetItem(str(bot.status)))
-            self.table_widget.setItem(row, 2, QTableWidgetItem(f"{bot.total_distance / 100:6.2f}"))
-            self.table_widget.setItem(row, 3, QTableWidgetItem(str(bot.collected_count)))
+            self.table_widget.setItem(row, 1, QTableWidgetItem(bot.card))
+            self.table_widget.setItem(row, 2, QTableWidgetItem(str(bot.status)))
+            self.table_widget.setItem(row, 3, QTableWidgetItem(f"{bot.total_distance / 100:6.2f}"))
+            self.table_widget.setItem(row, 4, QTableWidgetItem(str(bot.collected_count)))
             colorCell = QTableWidgetItem(" ")
             r, g, b = bot.color
             colorCell.setBackground(QColor(r, g, b))
 
-            self.table_widget.setItem(row, 4, colorCell)
+            self.table_widget.setItem(row, 5, colorCell)
         # Resize window to fit table contents
         self.resize_window_to_fit_table()
 
@@ -273,6 +274,10 @@ class AmakerControllerUI(QMainWindow):
         # Create menu bar (after existing menu bar code)
 
         # Add menu actions for order controls
+        self.obeyme_action = QAction("Obey Me", self)
+        self.obeyme_action.triggered.connect(self.obeyme_button_clicked)
+        self.order_menu.addAction(self.obeyme_action)
+
         self.start_action = QAction("Start", self)
         self.start_action.triggered.connect(self.start_button_clicked)
         self.order_menu.addAction(self.start_action)
@@ -376,6 +381,12 @@ class AmakerControllerUI(QMainWindow):
         if self.controller and hasattr(self.controller, 'tracked_bots'):
             bots = list(self.controller.tracked_bots.values())
             self.bots_info_window.update_table(bots)
+
+    def obeyme_button_clicked(self):
+        if self.controller:
+            self.controller.on_UI_BUTTON_obeyme()
+        else:
+            self._LOG.error("Controller is not initialized. Cannot handle obeyme.")
 
     def start_button_clicked(self):
         if self.controller:

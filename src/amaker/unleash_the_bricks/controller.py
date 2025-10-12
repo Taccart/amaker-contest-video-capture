@@ -6,16 +6,20 @@ import cv2
 import numpy as np
 from threading import Thread
 from queue import Queue
+
+from numpy.ma.core import append
+
 from amaker.communication.communication_abstract import CommunicationManagerAbstract
-from amaker.communication.serial_communication_manager import SerialCommunicationManagerImpl
+from amaker.communication.communication_serial import SerialCommunicationManagerImpl
 from amaker.detection.detector_apriltag import AprilTagDetectorImpl
 from amaker.unleash_the_bricks import \
     UI_RGBCOLOR_GREY_LIGHT, UI_RGBCOLOR_GREY_MEDIUM, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, UI_RGBCOLOR_GREY_DARK, \
     WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER, \
     VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC, UI_RGBCOLOR_YELLOW
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
-from amaker.unleash_the_bricks.controller_bridge import MessageType, RadioMessage, CommandEnum
+# from amaker.unleash_the_bricks.controller_bridge import MessageType, CommandEnum
 from gui_video import AmakerUnleashTheBrickVideo
+import re
 
 
 ###
@@ -39,7 +43,7 @@ CV_THREADS = 7
 
 CAMERA_SEARCH_LIMIT = 10
 
-LOG_MAX_LINES=10
+LOG_MAX_LINES=100
 
 UI_COLOR_TAG_UNKNOWN = UI_RGBCOLOR_GREY_DARK
 UI_COLOR_TAG_WALL = UI_RGBCOLOR_GREY_LIGHT
@@ -62,7 +66,12 @@ KEY_F = ord('f')
 COMMAND_START = "START"
 COMMAND_INFO = "INFO"
 COMMAND_STOP = "STOP"
+COMMAND_OBEYME = "OBEYME"
 COMMAND_DANGER = "DANGER"
+
+MESSAGE_REGEX = re.compile(
+    r'from=(?P<from>[^,]+),\s*type=(?P<type>[^ ]+)\s*\((?P<label>[^)]+)\),\s*payload=(?P<payload>.+)'
+)
 
 
 # Bot tracker constants
@@ -78,7 +87,19 @@ class AmakerBotTracker():
     def __init__(self, calibration_file, camera_index: int = 0, tracked_bots: dict[int, UnleashTheBrickBot] = None,
                  communication_manager=None, window_size=(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT),
                  know_tags: dict[int, dict] = None, max_logs=LOG_MAX_LINES, countdown_seconds:int=None, info_feed_interval_second: int=None, **kwarg):
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] {%(pathname)s:%(lineno)d} - %(message)s'))
         self._LOG = logging.getLogger(__name__)
+        self._LOG.setLevel(logging.INFO)
+        self._LOG.addHandler(stream_handler)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_handler = logging.FileHandler(f"utb_app_{timestamp}.log", mode='a')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] - %(message)s'))
+        self._SAVLOG = logging.getLogger("utb_app.log")
+        self._SAVLOG.setLevel(logging.INFO)
+        self._SAVLOG.addHandler(file_handler)
+
         self.reference_tags = know_tags
         self.logs = []
         self.communication_logs=[]
@@ -137,12 +158,13 @@ class AmakerBotTracker():
 
 
     def feed_start_thread(self):
-        if not self.feed_enabled:
-            return
-        self.feed_running = True
-        self.feed_thread = Thread(target=self.feed_reporting_loop)
-        self.feed_thread.daemon = True
-        self.feed_thread.start()
+        pass
+        # if not self.feed_enabled:
+        #     return
+        # self.feed_running = True
+        # self.feed_thread = Thread(target=self.feed_reporting_loop)
+        # self.feed_thread.daemon = True
+        # self.feed_thread.start()
 
     def feed_stop_thread(self):
         """Stop the periodic information feed thread safely"""
@@ -164,14 +186,15 @@ class AmakerBotTracker():
         self.feed_thread = None
 
     def feed_reporting_loop(self):
-        while self.feed_running :
-            self.feed_enqueue()
-            time.sleep(self.feed_interval)
+        pass
+        # while self.feed_running :
+        #     self.feed_enqueue()
+        #     time.sleep(self.feed_interval)
 
     def feed_enqueue(self):
-        return
+        pass
 
-        """Prepare tag info data and queue it for sending in main feed_thread"""
+        # """Prepare tag info data and queue it for sending in main feed_thread"""
         # feed_data = []
         ##Collect data from all tracked bots
         # for bot_id, bot_info in self.tracked_bots.items():
@@ -224,10 +247,21 @@ class AmakerBotTracker():
             self._LOG.warning(f"Error during video capture release: {e}")
 
     # Button callback functions
+    def on_UI_BUTTON_obeyme(self):
+        """Handle start button click"""
+        self.deadline=None
+        # self.feed_start_thread()
+        if self.communication_manager:
+            self.communication_manager.send(COMMAND_OBEYME)
+            self._add_log(f"> {COMMAND_OBEYME} sent")
+        else:
+            self._add_log(f"! {COMMAND_OBEYME} failed to send")
+
+    # Button callback functions
     def on_UI_BUTTON_start(self):
         """Handle start button click"""
         self.deadline=None
-        self.feed_start_thread()
+        # self.feed_start_thread()
         if self.communication_manager:
             self.communication_manager.send(COMMAND_START)
             self._add_log(f"> {COMMAND_START} sent")
@@ -270,6 +304,56 @@ class AmakerBotTracker():
         if len(self.logs) > self.max_logs:
             self.logs.pop(0)
 
+    def update_bot_status (self, bot_card, payload):
+        for bot_id, bot in self.tracked_bots.items():
+            if bot.card == bot_card:
+                self.tracked_bots[bot_id].status = payload
+                self._SAVLOG.info(f"STATUS: {self.tracked_bots[bot_id].name} = {bot.status}")
+                return
+        self._LOG.warning(f"Cannot find bot with card {bot_card} to update status to {payload}")
+
+    def update_bot_team(self, bot_card, team):
+        for bot_id, bot in self.tracked_bots.items():
+            if bot.name == team:
+                self.tracked_bots[bot_id].set_card( bot_card)
+                self._SAVLOG.info(f"TEAM: {self.tracked_bots[bot_id].name} = {bot_card}")
+                return
+        self._LOG.warning(f"Cannot find bot with team {team} to set card {bot_card}")
+    def update_bot_collected(self, bot_card, collected):
+        for bot_id, bot in self.tracked_bots.items():
+            if bot.card == bot_card:
+                try:
+                    collected_int = int(collected)
+                    self.tracked_bots[bot_id].collected_count= collected_int
+                    self._SAVLOG.info(f"COLLECT: {self.tracked_bots[bot_id].name} = {collected_int}")
+                except Exception as e:
+                    self._LOG.warning(f"Cannot parse collected value {collected} for bot {bot_card}: {e}")
+                return
+        self._LOG.warning(f"Cannot find bot with card {bot_card} to update collected to {collected}")
+    def parse_incoming_message (self, message :str) :
+        match = MESSAGE_REGEX.match(message)
+        if match:
+            bot_card = match.group('from')
+            code = match.group('type')
+            label = match.group('label')
+            payload = match.group('payload')
+            self._LOG.debug(f"received from {bot_card}/{code}:{label}/{payload}")
+
+            if label=="ACKNOWLEDGE" and payload =="IOBEY":
+                self._add_log(f"! Bot {bot_card} acknowledged the OBEYME command.")
+            elif label=="COLLECTED" :
+                self.update_bot_collected (bot_card, payload)
+            elif label=="TEAM" :
+                self.update_bot_team (bot_card, payload)
+            elif label=="STATUS" :
+                self._add_log(f"! Bot {bot_card} status is {payload}.")
+                self.update_bot_status (bot_card, payload)
+            # TODO : fix the UNKNOWN label on microbit side : should be COLLECTED
+            else:
+                self._SAVLOG.warning(f"{bot_card} : {label} -> {message}")
+        else:
+            self._LOG.warning(f"Cannot parse message: {message}")
+
     def _add_communication_log(self, message):
         """
         Add a log message to the logs list (keeping a limit on the number of lines)
@@ -278,8 +362,11 @@ class AmakerBotTracker():
         """
         current_time = datetime.datetime.now().strftime("%H:%M:%S")
         self.communication_logs.append(current_time + " " + str(message))
+        self._LOG.info(f"COMMUNICATION LOG;{current_time};{str(message)}")
         if len(self.communication_logs) > self.max_logs:
             self.communication_logs.pop(0)
+
+        self.parse_incoming_message (message)
 
     def overlay_countdown(self, frame):
         """

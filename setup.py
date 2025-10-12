@@ -1,10 +1,13 @@
 from setuptools import setup, find_packages
 
+
 setup(
     name="amaker-unleash-the-bricks",
     version="0.1.0",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
+    tests_require=["pytest"],
+    test_suite="tests",
     install_requires=[
         "numpy",
         "opencv-python",
@@ -21,9 +24,9 @@ setup(
             'unleash-the-bricks=amaker.unleash_the_bricks.gui_app:main',
         ],
     },
-    author="Th.Accart, aMaker club.",
+    author="Th.Accart, aMaker club,  CSE Amadeus",
     description="aMaker microbot tournament controller.",
-    python_requires=">=3.9",
+    python_requires=">=3.12",
     include_package_data=True,
     package_data={
         "amaker.unleash_the_bricks": ["resources/fonts/**/*.ttf", "resources/fonts/**/*.otf"]

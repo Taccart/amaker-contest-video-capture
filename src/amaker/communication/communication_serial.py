@@ -15,6 +15,10 @@ import serial.tools.list_ports
 
 from amaker.communication.communication_abstract import CommunicationManagerAbstract
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s'
+)
 # Constants for serial communication
 SERIAL_TIMEOUT = 1
 SERIAL_DEFAULT_BAUD_RATE = 57600
@@ -29,11 +33,12 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
 
     def __init__(self, serial_port=None, baud_rate=SERIAL_DEFAULT_BAUD_RATE, max_queue_size=DEFAULT_MAX_QUEUE_SIZE):
         """Initialize the serial manager"""
+
         self._LOG = logging.getLogger(__name__)
         self.serial_port = serial_port
         self.baud_rate = baud_rate
 
-        self.serial :Serial = None
+        self.serial :serial.Serial = None
 
 
         self.serial_connection = None
@@ -83,7 +88,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
                 return False
 
         try:
-            self.serial_connection = serial.Serial(port, baud_rate, timeout=SERIAL_TIMEOUT)
+            self.serial_connection = serial.PosixPollSerial(port, baud_rate, timeout=SERIAL_TIMEOUT, )
             self._LOG.info(f"Connected to {port} at {baud_rate} baud - {self.serial_connection}")
             self.serial_port = port
             self.baud_rate = baud_rate
@@ -103,7 +108,7 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
             return False
         self.serial_thread = threading.Thread(target=self.read_serial)
         self.serial_thread.name = "SerialReaderThread"
-        self.serial_thread.daemon = True
+        self.serial_thread.daemon = False
         self.serial_thread.start()
         wait_start = time.time()
         max_wait = 5.0  # Maximum 5 seconds to wait
@@ -120,20 +125,24 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
     def read_serial(self):
         """Read data from serial port in a separate feed_thread"""
         self._LOG.info("read serial")
-        while self.serial_connection and self.serial_connection.is_open:
-            try:
-                if self.serial_connection.in_waiting > 0:
-                    data = self.serial_connection.readline().decode('utf-8').strip()
-                    if data:
-                        try:
-                            # Add to queue without blocking (fail if full)
-                            self.serial_data.put_nowait(data)
-                        except queue.Full:  # Use queue.Full, not Queue.Full
-                            self._LOG.error(f"Serial queue full, discarding data: {data}")
-                time.sleep(SERIAL_READ_DELAY)
-            except Exception as e:
-                self._LOG.error(f"Serial read error: {str(e)}")
-                break
+        try:
+            while self.serial_connection and self.serial_connection.is_open:
+                try:
+                    if self.serial_connection.in_waiting > 0:
+                        data = self.serial_connection.readline().decode('utf-8').strip()
+                        if data:
+                            try:
+                                # Add to queue without blocking (fail if full)
+                                self.serial_data.put_nowait(data)
+                            except queue.Full:  # Use queue.Full, not Queue.Full
+                                self._LOG.error(f"Serial queue full, discarding data: {data}")
+                    time.sleep(SERIAL_READ_DELAY)
+                except Exception as e:
+                    self._LOG.error(f"Serial read error: {str(e)}")
+        except Exception as e:
+            self._LOG.error(f"Serial fatal error: {str(e)}")
+            self.close()
+
 
     def send(self, message):
         """Send a command to the serial port"""
@@ -189,13 +198,17 @@ class SerialCommunicationManagerImpl(CommunicationManagerAbstract):
 
     def close(self):
         """Close the serial connection"""
-        if self.serial_connection and self.serial_connection.is_open:
-            if self.serial_thread:
-                self.serial_thread.join(timeout=THREAD_JOIN_TIMEOUT)
-            self.serial_connection.close()
+        if self.serial_thread:
+            self.serial_thread.join(timeout=THREAD_JOIN_TIMEOUT)
+            self.serial_thread = None
+            self._LOG.info("Serial thread closed")
+        if self.serial_connection:
+            if self.serial_connection.is_open:
+                self.serial_connection.close()
+            self.serial_connection = None
             self._LOG.info("Serial connection closed")
-            return True
-        return False
+        return True
+
 
     def __del__(self):
         """Destructor to clean up resources"""
