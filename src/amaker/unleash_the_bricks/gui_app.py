@@ -347,36 +347,64 @@ class AmakerControllerUI(QMainWindow):
                                       Qt.TransformationMode.SmoothTransformation)
         self.video_place_holder.setPixmap(scaled_pixmap)
 
+    # def update_frame(self):
+    #     if self.controller:
+    #
+    #         ret, frame = self.controller.video_capture.read()
+    #         if ret:
+    #             # Process the frame using the controller
+    #             detected_tags = self.controller.bot_tracker.detect(frame)
+    #             self.controller.overlay_tags(frame, detected_tags)
+    #             # deactivate bots infos to fasten frame
+    #             self.controller.amaker_ui.show_bot_infos(frame, self.controller.tracked_bots)
+    #
+    #             self.controller.amaker_ui.ui_add_countdown(frame, self.controller.deadline)
+    #
+    #             self.controller.process_pending_feed_messages()
+    #             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #             height, width, channel = frame.shape
+    #             step = channel * width
+    #             q_img = QImage(frame.data, width, height, step, QImage.Format.Format_RGB888)
+    #             pixmap = QPixmap.fromImage(q_img)
+    #             self.update_video_place_holder_pixmap(pixmap)
+    #             if self.controller.video_writer and self.controller.video_writer.isOpened():
+    #                 # Save the frame to the video file
+    #                 video_out = cv2.resize(frame, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
+    #
+    #                 self.controller.video_writer.write(video_out)
+    #             try:
+    #                 self.controller.process_pending_feed_messages()
+    #             except Exception as e:
+    #                 self._LOG.error(f"Error processing feed messages: {e}")
+
     def update_frame(self):
         if self.controller:
-
             ret, frame = self.controller.video_capture.read()
             if ret:
-                # Process the frame using the controller
+                # Process the frame using the controller (in BGR format)
                 detected_tags = self.controller.bot_tracker.detect(frame)
                 self.controller.overlay_tags(frame, detected_tags)
-                # deactivate bots infos to fasten frame
                 self.controller.amaker_ui.show_bot_infos(frame, self.controller.tracked_bots)
-
                 self.controller.amaker_ui.ui_add_countdown(frame, self.controller.deadline)
-
                 self.controller.process_pending_feed_messages()
+
+                # Save to video BEFORE RGB conversion (VideoWriter expects BGR)
+                if self.controller.video_writer and self.controller.video_writer.isOpened():
+                    video_out = cv2.resize(frame, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
+                    self.controller.video_writer.write(video_out)
+
+                # Convert to RGB only for Qt display
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 height, width, channel = frame.shape
                 step = channel * width
                 q_img = QImage(frame.data, width, height, step, QImage.Format.Format_RGB888)
                 pixmap = QPixmap.fromImage(q_img)
                 self.update_video_place_holder_pixmap(pixmap)
-                if self.controller.video_writer and self.controller.video_writer.isOpened():
-                    # Save the frame to the video file
-                    video_out = cv2.resize(frame, (VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT))
-                    self.controller.video_writer.write(video_out)
+
                 try:
                     self.controller.process_pending_feed_messages()
                 except Exception as e:
                     self._LOG.error(f"Error processing feed messages: {e}")
-
-
     def update_table(self):
         if self.controller and hasattr(self.controller, 'tracked_bots'):
             bots = list(self.controller.tracked_bots.values())
