@@ -24,7 +24,7 @@ from amaker.unleash_the_bricks.controller import AmakerBotTracker
 os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 #
-VIDEO_REFRESH_FPS = 20
+VIDEO_REFRESH_FPS = 30
 
 DEFAULT_WINDOW_MAIN_X = 100
 DEFAULT_WINDOW_MAIN_Y = 100
