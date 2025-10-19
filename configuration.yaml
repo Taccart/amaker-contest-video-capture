@@ -43,31 +43,31 @@ recording:
 
 # tags -> Bot configurations
 known_tags:
-  300:
-    name: "East"
-    type: "wall"
-  301:
-    name: "South"
-    type: "wall"
-  302:
-    name: "West"
-    type: "wall"
-  303:
-    name: "North"
-    type: "wall"
-
-  310:
-    name: "South-East"
-    type: "ground"
-  311:
-    name: "South-West"
-    type: "ground"
-  312:
-    name: "North-West"
-    type: "ground"
-  313:
-    name: "North-East"
-    type: "ground"
+#  300:
+#    name: "East"
+#    type: "wall"
+#  301:
+#    name: "South"
+#    type: "wall"
+#  302:
+#    name: "West"
+#    type: "wall"
+#  303:
+#    name: "North"
+#    type: "wall"
+#
+#  310:
+#    name: "South-East"
+#    type: "ground"
+#  311:
+#    name: "South-West"
+#    type: "ground"
+#  312:
+#    name: "North-West"
+#    type: "ground"
+#  313:
+#    name: "North-East"
+#    type: "ground"
 
   74:
     type: "bot"
@@ -91,7 +91,7 @@ known_tags:
     color: [60, 180, 75]  # GREEN
   75:
     type: "bot"
-    name: "Rocket"
+    name: "TeamRocket"
     color: [66, 212, 244] # CYAN
   76:
     type: "bot"
