@@ -596,16 +596,17 @@ class AmakerUnleashTheBrickVideo:
         :param img:
         :return:
         """
-        i = 0
-        for bot_id, bot in tracked_bots.items():
-            y_pos = UI_BOT_INFO_Y + (i * UI_BOT_INFO_Y_DELTA)
-
-            img= self.put_text_ttf(img=img,
-                                        text=bot.name,
-                                        position=(UI_BOT_INFO_X, y_pos),
-                                        font_name=UI_BOT_INFO_FONT_NAME,
-                                        font_size=UI_BOT_INFO_FONT_SIZE,
-                                        font_color=bot.color )
-
-
-            i += 1
+        pass
+        # i = 0
+        # for bot_id, bot in tracked_bots.items():
+        #     y_pos = UI_BOT_INFO_Y + (i * UI_BOT_INFO_Y_DELTA)
+        #
+        #     img= self.put_text_ttf(img=img,
+        #                                 text=bot.name,
+        #                                 position=(UI_BOT_INFO_X, y_pos),
+        #                                 font_name=UI_BOT_INFO_FONT_NAME,
+        #                                 font_size=UI_BOT_INFO_FONT_SIZE,
+        #                                 font_color=bot.color )
+        #
+        #
+        #     i += 1
