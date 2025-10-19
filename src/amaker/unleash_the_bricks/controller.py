@@ -314,7 +314,8 @@ class AmakerBotTracker():
 
     def update_bot_team(self, bot_card, team):
         for bot_id, bot in self.tracked_bots.items():
-            if bot.name == team:
+            # the radio message may be cut if team name is too long
+            if (bot.name.upper() == team.upper() or  bot.name.upper().startswith(team.upper())):
                 self.tracked_bots[bot_id].set_card( bot_card)
                 self._SAVLOG.info(f"TEAM: {self.tracked_bots[bot_id].name} = {bot_card}")
                 return
@@ -350,7 +351,7 @@ class AmakerBotTracker():
                 self.update_bot_status (bot_card, payload)
             # TODO : fix the UNKNOWN label on microbit side : should be COLLECTED
             else:
-                self._SAVLOG.warning(f"{bot_card} : {label} -> {message}")
+                self._SAVLOG.info(f"{bot_card} : {label} -> {message}")
         else:
             self._LOG.warning(f"Cannot parse message: {message}")
 
@@ -384,23 +385,26 @@ class AmakerBotTracker():
         :return:
         """
         for tag in tags:
-
+            self._LOG.debug(f"Detected tag ID {tag.tag_id} ")
             color = UI_COLOR_TAG_UNKNOWN
             #TODO : avoid duplicate ID in tracked_bots and in bot itself.tracked_bots
             if tag.tag_id in self.tracked_bots.keys():
+                self._LOG.info(f"Detected tag ID {tag.tag_id} is bot")
                 self.tracked_bots[tag.tag_id].add_tag_position(tag)
                 self.amaker_ui.ui_add_bot(self.amaker_ui, self.mtx, self.dist, frame, self.tracked_bots[tag.tag_id])
-
             elif tag.tag_id in self.reference_tags.keys():
+                self._LOG.debug(f"Detected tag ID {tag.tag_id} is {self.reference_tags[tag.tag_id]["type"]}")
                 if self.reference_tags[tag.tag_id]["type"] == "wall":
                     color = UI_COLOR_TAG_WALL
                 elif self.reference_tags[tag.tag_id]["type"] == "ground":
                     color = UI_COLOR_TAG_GROUND
                 elif self.reference_tags[tag.tag_id]["type"] == "goal":
                     color = UI_COLOR_TAG_GOAL
-                self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color, label=self.reference_tags[tag.tag_id]["name"])
+                    # only show goal tags if known
+                    self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color, label=self.reference_tags[tag.tag_id]["name"])
             else:
-                self._LOG.debug(f"Tag {tag.tag_id} unknown : not shown. ")
+                self._LOG.info(f"Detected tag ID {tag.tag_id} is unkown")
+
             self._LOG.debug(f"BOT {tag.tag_id},  T={tag.pose_t} R={tag.pose_R} C={tag.center}")
 
     @staticmethod
