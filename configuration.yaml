@@ -68,70 +68,67 @@ known_tags:
 #  313:
 #    name: "North-East"
 #    type: "ground"
-
   74:
     type: "bot"
     name: "AmaBot"
-    color: [230, 25, 75] # RED
+    color: [101, 148, 255] # 6594ff colorblind light blue
   77:
     type: "bot"
     name: "BridgeTheBrick"
-    color: [245, 130, 49]  # ORANGE
+    color: [77, 60, 204]  # 4d3ccc colorblind blue
   73:
     type: "bot"
     name: "BwT"
-    color:  [255, 225, 25]  # YELLOW
+    color: [0, 46, 153]  # 002e99 colorblind dark blue
   78:
     type: "bot"
     name: "GEMinator"
-    color: [191, 239, 69] # LIME
+    color: [184, 102, 255] # b866ff colorblind light purple
   79:
     type: "bot"
     name: "RequiemForABot"
-    color: [60, 180, 75]  # GREEN
+    color: [197, 60, 204]  # c53ccc colorblind purple
   75:
     type: "bot"
     name: "TeamRocket"
-    color: [66, 212, 244] # CYAN
+    color: [82, 0, 153] # 520099 colorblind dark purple
   76:
     type: "bot"
     name: "Terminator"
-    color: [67, 99, 216] # BLUE
+    color: [254, 185, 75] # feb94b colorblind yellow
   72:
     type: "bot"
     name: "TeslaCybertruck"
-    color: [145, 30, 180]  # PURPLE
-
+    color: [255, 133, 102]  # ff8566 colorblind orange
   400:
     type: "goal"
     name: "Amabot"
-    color: [230, 25, 75]    # Red
+    color: [101, 148, 255]  # 6594ff colorblind light blue (matches AmaBot)
   401:
     type: "goal"
     name: "BridgeTheBricks"
-    color: [245, 130, 49]   # Orange
+    color: [77, 60, 204]    # 4d3ccc colorblind blue (matches BridgeTheBrick)
   402:
     type: "goal"
     name: "BwT"
-    color: [255, 225, 25]   # Yellow
+    color: [0, 46, 153]     # 002e99 colorblind dark blue (matches BwT)
   403:
     type: "goal"
     name: "Geminator"
-    color: [191, 239, 69]   # Lime
+    color: [184, 102, 255]  # b866ff colorblind light purple (matches GEMinator)
   404:
     type: "goal"
     name: "RequiemForABot"
-    color: [60, 180, 75]    # Green
+    color: [197, 60, 204]   # c53ccc colorblind purple (matches RequiemForABot)
   405:
     type: "goal"
     name: "Rocket"
-    color: [66, 212, 244]   # Cyan
+    color: [82, 0, 153]     # 520099 colorblind dark purple (matches TeamRocket)
   406:
     type: "goal"
     name: "Terminator"
-    color: [67, 99, 216]    # Blue
+    color: [254, 185, 75]   # feb94b colorblind yellow (matches Terminator)
   407:
     type: "goal"
     name: "TeslaCybertruck"
-    color: [145, 30, 180]   # Purple
-
+    color: [255, 133, 102]  # ff8566 colorblind orange (matches TeslaCybertruck)
