@@ -15,8 +15,7 @@ from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 
 
 UI_BOT_INFO_FONT_COLOR = UI_RGBCOLOR_WHITE
-UI_BOT_INFO_FONT_NAME = "Doto-Bold"
-UI_BOT_INFO_FONT_SIZE = 30
+
 UI_BOT_INFO_X = 5
 UI_BOT_INFO_Y = -35
 UI_BOT_INFO_Y_DELTA = -25
@@ -50,7 +49,6 @@ UI_BUTTON_THICKNESS = 1
 UI_BUTTON_WIDTH = 75
 UI_BUTTON_X_POS = 1000
 UI_BUTTON_Y_POS = 10
-UI_DEFAULT_IMAGE_MASK = 'backgroundmask_1920x1080.jpg'
 UI_LOG_COLOR = UI_RGBCOLOR_BLACK
 UI_LOG_FONT_COLOR = UI_RGBCOLOR_WHITE
 UI_LOG_FONT_NAME ="CutiveMono"
@@ -111,42 +109,6 @@ class AmakerUnleashTheBrickVideo:
             i+=1
         fonts_dir =self.font_dir=config.video.font_dir if "session_options" in config and  "video" in config["session_options"] and "font_dir" in config["session_options"]["video"] else self.get_fonts_directory()
 
-    # Load fonts. TTF are dramatically slow: avoid using them if possible, use a mask image.
-        self.ui_fonts_path = {
-            "Doto-Black": os.path.join(fonts_dir, "Doto", "static/Doto-Black.ttf"),
-            "Doto_Rounded-Bold": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Bold.ttf"),
-            "Doto-Thin": os.path.join(fonts_dir, "Doto", "static/Doto-Thin.ttf"),
-            "Doto_Rounded-Light": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Light.ttf"),
-            "Doto_Rounded-Thin": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Thin.ttf"),
-            "Doto-ExtraBold": os.path.join(fonts_dir, "Doto", "static/Doto-ExtraBold.ttf"),
-            "Doto_Rounded-Black": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Black.ttf"),
-            "Doto_Rounded-SemiBold": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-SemiBold.ttf"),
-            "Doto_Rounded": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Regular.ttf"),
-            "Doto-SemiBold": os.path.join(fonts_dir, "Doto", "static/Doto-SemiBold.ttf"),
-            "Doto_Rounded-ExtraLight": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-ExtraLight.ttf"),
-            "Doto_Rounded-ExtraBold": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-ExtraBold.ttf"),
-            "Doto-Medium": os.path.join(fonts_dir, "Doto", "static/Doto-Medium.ttf"),
-            "Doto_Rounded-Medium": os.path.join(fonts_dir, "Doto", "static/Doto_Rounded-Medium.ttf"),
-            "Doto": os.path.join(fonts_dir, "Doto", "static/Doto-Regular.ttf"),
-            "Doto-ExtraLight": os.path.join(fonts_dir, "Doto", "static/Doto-ExtraLight.ttf"),
-            "Doto-Bold": os.path.join(fonts_dir, "Doto", "static/Doto-Bold.ttf"),
-            "Doto-Light": os.path.join(fonts_dir, "Doto", "static/Doto-Light.ttf"),
-            "Doto-VariableFont_ROND,wght": os.path.join(fonts_dir, "Doto", "Doto-VariableFont_ROND,wght.ttf"),
-
-            "CutiveMono": os.path.join(fonts_dir, "Cutive_Mono", "CutiveMono-Regular.ttf"),
-
-            "RubikMoonrocks": os.path.join(fonts_dir, "Rubik_Moonrocks", "RubikMoonrocks-Regular.ttf"),
-
-        }
-        kept_fonts= {}
-        for font_name, font_path in self.ui_fonts_path.items():
-            if  os.path.exists(font_path):
-                kept_fonts[font_name]= font_path
-            else:
-                self._LOG.warning(f"Font not found: {font_path}")
-        self.ui_fonts_path=kept_fonts
-
-
 
     def rgb_to_bgr(self, rgb_color):
         """
@@ -202,11 +164,7 @@ class AmakerUnleashTheBrickVideo:
 
     def _load_logo(self):
         pass
-        # self.logo_image = cv2.imread(UI_DEFAULT_IMAGE_MASK, cv2.IMREAD_UNCHANGED)
-        # if self.logo_image is None:
-        #     self.logger.error(f"Failed to load mask image from {UI_DEFAULT_IMAGE_MASK}")
-        # else:
-        #     self.logo_loaded = True
+
 
     def _resize_logo(self, target_width):
         if not self.logo_loaded or self.logo_image is None:
@@ -238,30 +196,10 @@ class AmakerUnleashTheBrickVideo:
             x= img.shape[1] + x
         if y<0:
             y=img.shape[0] + y
-        if not (font_name in self.ui_fonts_path):
-            # Fall back to OpenCV font if TTF not available
-            cv2.putText(img, text, (int(x),int(y)), cv2.FONT_HERSHEY_SIMPLEX,  0.75 , self.rgb_to_bgr(font_color), thickness=2)
-            return img
-        else:
-            # Load the font
-            font_path = self.ui_fonts_path[font_name]
-            try:
-                font = ImageFont.truetype(font_path, font_size)
-            except Exception as e:
-                self._LOG.error(f"Failed to load font {font_name} from {font_path}: {e}")
-                return img
 
-            # Create a PIL image from the OpenCV image
-            pil_img = img #Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-            draw = ImageDraw.Draw(pil_img)
+        cv2.putText(img, text, (int(x),int(y)), cv2.FONT_HERSHEY_SIMPLEX,  1 , self.rgb_to_bgr(font_color), thickness=1)
+        return img
 
-            # Draw the text
-            draw.text((x,y), text, font=font, fill=self.rgb_to_bgr(font_color))
-
-            # Convert back to OpenCV format
-            result=cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-            img[:]=result
-            return img
 
     def ui_add_button(self, button, img):
         # cv2.rectangle(img, (button['x'], button['y']), (button['x'] + button['w'], button['y'] + button['h']),
@@ -332,7 +270,7 @@ class AmakerUnleashTheBrickVideo:
                               font_size=UI_COUNT_DOWN_FONT_SIZE,
                               font_color=countdown_color)
         return img
-    def ui_add_bot(self, amaker_ui, mtx, dist, img, bot: UnleashTheBrickBot):
+    def ui_add_bot(self, amaker_ui, mtx, dist, img, bot: UnleashTheBrickBot, show_name:bool=True):
         """
         Overlay a bot on the frame, with box, trail and head direction
         :param img:
@@ -388,12 +326,13 @@ class AmakerUnleashTheBrickVideo:
             cv2.line(img, corners_int[0], tuple(image_points[1]), self.rgb_to_bgr(bot.color), 3)  # X-axis only
             cv2.line(img, corners_int[3], tuple(image_points[1]), self.rgb_to_bgr(bot.color), 3)  # X-axis only
             # useless: bot name are already shown on screen
-            # img= amaker_ui.put_text_ttf(img,
-            #                             text=bot.name,
-            #                             position=origin,
-            #                             font_name="UI_BOT_TAG_FONT_NAME",
-            #                             font_size=UI_BOT_TAG_FONT_SIZE,
-            #                             font_color=(255,255,255))
+            if show_name:
+                img= amaker_ui.put_text_ttf(img,
+                                        text=bot.name,
+                                        position=corners_int[3],
+                                        font_name=UI_BOT_TAG_FONT_NAME,
+                                        font_size=UI_BOT_TAG_FONT_SIZE,
+                                        font_color=bot.color)
         return img
 
 
