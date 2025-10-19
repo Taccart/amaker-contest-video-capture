@@ -6,7 +6,7 @@ window:
 
 
 session_options:
-  countdown_second: 240
+  countdown_second: 120
   feed_interval_second: 2
   participants: # session type = quest when 1 participant, duel when 2 participants, scuffle when 3 or more participants
    - "AmaBot"
@@ -27,10 +27,10 @@ session_options:
 
 camera:
   calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
-  number: 0    # Use -1 to interactively select from list of available cams
+  number: -1    # Use -1 to interactively select from list of available cams
 
 communication:
-  serial_port: "/dev/ttyACM0"
+  serial_port: "/dev/ttyACM1"
   serial_speed: 115200
 
 logs:
@@ -38,6 +38,7 @@ logs:
 
 recording:
   enabled: True
+  feed_enabled:   True
   path: "/tmp/" # Path to save recordings
 
 # tags -> Bot configurations
