@@ -1,12 +1,12 @@
-# Unleash the Bricks Configuration
-window:
-  width: 1920
-  height: 1080
+
 
 
 
 session_options:
   countdown_second: 120
+  # phase 1 : alone => 120 seconds
+  # phase 2 : duel => 240 seconds
+  # phase 3 : four => 240 seconds
   feed_interval_second: 2
   participants: # session type = quest when 1 participant, duel when 2 participants, scuffle when 3 or more participants
    - "AmaBot"
@@ -24,6 +24,10 @@ session_options:
 #    show_bots: true
 #    show_goals: true
 
+# Unleash the Bricks Configuration
+window:
+  width: 1920
+  height: 1080
 
 camera:
   calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
