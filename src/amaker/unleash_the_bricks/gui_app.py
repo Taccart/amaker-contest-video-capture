@@ -386,6 +386,7 @@ class AmakerControllerUI(QMainWindow):
                 self.controller.overlay_tags(frame, detected_tags)
                 self.controller.amaker_ui.show_bot_infos(frame, self.controller.tracked_bots)
                 self.controller.amaker_ui.ui_add_countdown(frame, self.controller.deadline)
+                self.controller.amaker_ui.ui_add_safety_countdown(frame, self.controller.safety_deadline)
                 self.controller.process_pending_feed_messages()
 
                 # Save to video BEFORE RGB conversion (VideoWriter expects BGR)
