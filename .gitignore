@@ -7,4 +7,6 @@ venv
 **/__pycache__
 /.tox/
 /build/
+/out/
+/.venv/
 **/*.log
