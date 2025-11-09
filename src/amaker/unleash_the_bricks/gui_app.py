@@ -12,7 +12,7 @@ from PyQt6.QtCore import Qt, QTimer, QSettings
 from PyQt6.QtGui import QPixmap, QImage, QAction, QColor
 # PyQt imports - grouped together and explicitly formatted
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QTextEdit, QTableWidget,
-                             QTableWidgetItem, QHeaderView, QDockWidget, QMenuBar, QSizePolicy)
+                             QTableWidgetItem, QHeaderView, QDockWidget, QMenuBar, QSizePolicy, QMessageBox)
 
 from amaker.communication.communication_serial import SerialCommunicationManagerImpl
 from amaker.unleash_the_bricks import DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, \
@@ -227,20 +227,20 @@ class AmakerControllerUI(QMainWindow):
         self.bots_info_window.setWindowTitle("Bots")
         self.bots_info_window.setObjectName("bots_info_window")
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.bots_info_window)
-        self.bots_info_window.visibilityChanged.connect(self.toggle_bot_info_action)
+        self.bots_info_window.visibilityChanged.connect(self.ui_toggle_bot_info_action)
 
         # Create communication logs window (if it doesn't exist)
         self.comm_logs_window = LogDockWidget()
         self.comm_logs_window.setWindowTitle("Communication logs")
         self.comm_logs_window.setObjectName("communication_logs_window")
         self.tabifyDockWidget(self.bots_info_window, self.comm_logs_window)
-        self.comm_logs_window.visibilityChanged.connect(self.toggle_communication_logs)
+        self.comm_logs_window.visibilityChanged.connect(self.ui_toggle_communication_logs)
 
         self.system_logs_window = LogDockWidget()
         self.system_logs_window.setWindowTitle("System logs")
         self.system_logs_window.setObjectName("system_logs_window")
         self.tabifyDockWidget(self.bots_info_window, self.system_logs_window)
-        self.system_logs_window.visibilityChanged.connect(self.toggle_system_logs_action)
+        self.system_logs_window.visibilityChanged.connect(self.ui_toggle_system_logs_action)
         self.log_handler = UILogHandler(self.system_logs_window, max_lines=100)
         self.log_handler.setLevel(logging.INFO)  # Set appropriate level
         logging.getLogger().addHandler(self.log_handler)
@@ -254,17 +254,17 @@ class AmakerControllerUI(QMainWindow):
         self.system_logs_action = QAction("System Logs", self)
         self.system_logs_action.setCheckable(True)
         self.system_logs_action.setChecked(True)
-        self.system_logs_action.triggered.connect(self.toggle_system_logs_window)
+        self.system_logs_action.triggered.connect(self.ui_toggle_system_logs_window)
 
         self.bots_info_action = QAction("Bots table", self)
         self.bots_info_action.setCheckable(True)
         self.bots_info_action.setChecked(True)
-        self.bots_info_action.triggered.connect(self.toggle_bots_info_window)
+        self.bots_info_action.triggered.connect(self.ui_toggle_bots_info_window)
 
         self.comm_logs_action = QAction("Communication Logs", self)
         self.comm_logs_action.setCheckable(True)
         self.comm_logs_action.setChecked(False)
-        self.comm_logs_action.triggered.connect(self.toggle_comm_logs_window)
+        self.comm_logs_action.triggered.connect(self.ui_toggle_comm_logs_window)
 
         # Add actions to view menu
         self.view_menu.addAction(self.system_logs_action)
@@ -275,20 +275,22 @@ class AmakerControllerUI(QMainWindow):
 
         # Add menu actions for order controls
         self.obeyme_action = QAction("Obey Me", self)
-        self.obeyme_action.triggered.connect(self.obeyme_button_clicked)
+        self.obeyme_action.triggered.connect(self.ui_obeyme_button_clicked)
         self.order_menu.addAction(self.obeyme_action)
 
         self.start_action = QAction("Start", self)
-        self.start_action.triggered.connect(self.start_button_clicked)
+        self.start_action.triggered.connect(self.ui_start_button_clicked)
         self.order_menu.addAction(self.start_action)
 
-        self.stop_action = QAction("Stop", self)
-        self.stop_action.triggered.connect(self.stop_button_clicked)
-        self.order_menu.addAction(self.stop_action)
+
 
         self.safety_action = QAction("Safety", self)
-        self.safety_action.triggered.connect(self.safety_button_clicked)
+        self.safety_action.triggered.connect(self.ui_safety_button_clicked)
         self.order_menu.addAction(self.safety_action)
+
+        self.stop_action = QAction("Stop", self)
+        self.stop_action.triggered.connect(self.ui_stop_button_clicked)
+        self.order_menu.addAction(self.stop_action)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -296,31 +298,31 @@ class AmakerControllerUI(QMainWindow):
         if hasattr(self.video_place_holder, 'pixmap') and not self.video_place_holder.pixmap().isNull():
             self.update_video_place_holder_pixmap(self.video_place_holder.pixmap())
 
-    def toggle_system_logs_window(self):
+    def ui_toggle_system_logs_window(self):
         if self.system_logs_window.isVisible():
             self.system_logs_window.hide()
         else:
             self.system_logs_window.show()
 
-    def toggle_bots_info_window(self):
+    def ui_toggle_bots_info_window(self):
         if self.bots_info_window.isVisible():
             self.bots_info_window.hide()
         else:
             self.bots_info_window.show()
 
-    def toggle_comm_logs_window(self):
+    def ui_toggle_comm_logs_window(self):
         if self.comm_logs_window.isVisible():
             self.comm_logs_window.hide()
         else:
             self.comm_logs_window.show()
 
-    def toggle_bot_info_action(self, visible):
+    def ui_toggle_bot_info_action(self, visible):
         self.bots_info_action.setChecked(visible)
 
-    def toggle_system_logs_action(self, visible):
+    def ui_toggle_system_logs_action(self, visible):
         self.system_logs_action.setChecked(visible)
 
-    def toggle_communication_logs(self, visible: bool):
+    def ui_toggle_communication_logs(self, visible: bool):
         self.comm_logs_action.setChecked(visible)
 
     def update_communication_log (self):
@@ -411,29 +413,48 @@ class AmakerControllerUI(QMainWindow):
             bots = list(self.controller.tracked_bots.values())
             self.bots_info_window.update_table(bots)
 
-    def obeyme_button_clicked(self):
-        if self.controller:
-            self.controller.on_UI_BUTTON_obeyme()
+    def ui_get_confirmation(self, title:str, message: str) -> bool:
+        reply= QMessageBox.question(
+            self,
+            title,
+            message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        return reply==QMessageBox.StandardButton.Yes
+    def ui_obeyme_button_clicked(self):
+        if self.ui_get_confirmation("Confirm Obey Me", "Are you sure you want to send the 'Obey Me' command to all bots?"):
+            if self.controller:
+                self.controller.on_UI_BUTTON_obeyme()
+            else:
+                self._LOG.error("Controller is not initialized. Cannot handle obeyme.")
         else:
-            self._LOG.error("Controller is not initialized. Cannot handle obeyme.")
+            self._LOG.info("Obey Me command cancelled by user.")
 
-    def start_button_clicked(self):
-        if self.controller:
-            self.controller.on_UI_BUTTON_start()
+    def ui_start_button_clicked(self):
+        if self.ui_get_confirmation("Confirm Start", "You are about to reset countdown(s):\n are you sure you want to start the session?"):
+            if self.controller:
+                self.controller.on_UI_BUTTON_start()
+            else:
+                self._LOG.error("Controller is not initialized. Cannot handle start.")
         else:
-            self._LOG.error("Controller is not initialized. Cannot handle start.")
-
-    def stop_button_clicked(self):
-        if self.controller:
-            self.controller.on_UI_BUTTON_stop()
+            self._LOG.info("Start command cancelled by user.")
+    def ui_stop_button_clicked(self):
+        if self.ui_get_confirmation("Confirm Stop", "You are about to reset countdown(s) :\nare you sure you want to stop the session?"):
+            if self.controller:
+                self.controller.on_UI_BUTTON_stop()
+            else:
+                self._LOG.error("Controller is not initialized. Cannot handle stop.")
         else:
-            self._LOG.error("Controller is not initialized. Cannot handle stop.")
-
-    def safety_button_clicked(self):
-        if self.controller:
-            self.controller.on_UI_BUTTON_safety()
+            self._LOG.info("Stop command cancelled by user.")
+    def ui_safety_button_clicked(self):
+        if self.ui_get_confirmation("Confirm Safety", "You are about to reset the countdown :\nare you sure you want to activate safety mode?"):
+            if self.controller:
+                self.controller.on_UI_BUTTON_safety()
+            else:
+                self._LOG.error("Controller is not initialized. Cannot handle safety.")
         else:
-            self._LOG.error("Controller is not initialized. Cannot handle safety.")
+            self._LOG.info("Safety command cancelled by user.")
 
     def closeEvent(self, event):
         if hasattr(self, 'log_handler'):
