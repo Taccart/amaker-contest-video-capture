@@ -2,8 +2,7 @@ from datetime import datetime, timedelta
 import logging
 from typing import Callable
 
-from PIL import ImageFont, ImageDraw, Image
-import os
+
 import cv2
 import numpy as np
 
@@ -262,12 +261,12 @@ class AmakerUnleashTheBrickVideo:
         # Stop displaying at -6 or below
             return img
 
-        img=self.put_text_ttf(img=img,
+        return (self.put_text_ttf(img=img,
                               text=countdown_text,
                               position=(UI_SAFETY_COUNT_DOWN_X , UI_SAFETY_COUNT_DOWN_Y),
                               font_name=UI_COUNT_DOWN_FONT_NAME,
                               font_size=UI_COUNT_DOWN_FONT_SIZE,
-                              font_color=countdown_color)
+                              font_color=countdown_color))
     def ui_add_countdown(self, img, deadline:datetime):
         """
         Overlay a countdown timer on the frame
