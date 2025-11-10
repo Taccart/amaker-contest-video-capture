@@ -2,8 +2,7 @@ from datetime import datetime, timedelta
 import logging
 from typing import Callable
 
-from PIL import ImageFont, ImageDraw, Image
-import os
+
 import cv2
 import numpy as np
 
@@ -19,7 +18,8 @@ UI_BOT_INFO_FONT_COLOR = UI_RGBCOLOR_WHITE
 UI_BOT_INFO_X = 5
 UI_BOT_INFO_Y = -35
 UI_BOT_INFO_Y_DELTA = -25
-
+UI_SAFETY_COUNT_DOWN_X= 90
+UI_SAFETY_COUNT_DOWN_Y= -70
 UI_COUNT_DOWN_X= -190
 UI_COUNT_DOWN_Y= -70
 UI_COUNT_DOWN_FONT_NAME="Doto-Bold"
@@ -245,6 +245,28 @@ class AmakerUnleashTheBrickVideo:
             # Combine foreground and background
             background[y:y + h, x:x + w, :3] = foreground + background_area
 
+    def ui_add_safety_countdown(self, img, deadline:datetime=None):
+        if deadline is None:
+            return img
+        seconds_left = -1*int((deadline - datetime.now()).total_seconds())
+
+        if seconds_left < 0:
+            countdown_color = UI_COUNT_DOWN_COLOR_MEDIUM
+            countdown_text = f"T {seconds_left}s"
+        elif seconds_left <= 5:
+            countdown_color = UI_COUNT_DOWN_COLOR_SHORT
+            countdown_text = f"T +{seconds_left}s"
+
+        else:
+        # Stop displaying at -6 or below
+            return img
+
+        return (self.put_text_ttf(img=img,
+                              text=countdown_text,
+                              position=(UI_SAFETY_COUNT_DOWN_X , UI_SAFETY_COUNT_DOWN_Y),
+                              font_name=UI_COUNT_DOWN_FONT_NAME,
+                              font_size=UI_COUNT_DOWN_FONT_SIZE,
+                              font_color=countdown_color))
     def ui_add_countdown(self, img, deadline:datetime):
         """
         Overlay a countdown timer on the frame

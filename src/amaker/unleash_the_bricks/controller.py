@@ -107,6 +107,8 @@ class AmakerBotTracker():
         self.max_logs = max_logs
 
         self.deadline:datetime=None
+        self.safety_deadline:datetime=None
+
         self.window_size = window_size
         self.calibration_file = calibration_file
         calibration_data = np.load(calibration_file)
@@ -249,7 +251,8 @@ class AmakerBotTracker():
     # Button callback functions
     def on_UI_BUTTON_obeyme(self):
         """Handle start button click"""
-        self.deadline=None
+
+
         # self.feed_start_thread()
         if self.communication_manager:
             self.communication_manager.send(COMMAND_OBEYME)
@@ -261,6 +264,7 @@ class AmakerBotTracker():
     def on_UI_BUTTON_start(self):
         """Handle start button click"""
         self.deadline=None
+        self.safety_deadline=None
         # self.feed_start_thread()
         if self.communication_manager:
             self.communication_manager.send(COMMAND_START)
@@ -273,6 +277,7 @@ class AmakerBotTracker():
     def on_UI_BUTTON_stop(self):
         """Handle stop button click"""
         self.deadline=None
+        self.safety_deadline=None
         self.feed_stop_thread()
         if self.communication_manager:
             self.communication_manager.send(COMMAND_STOP)
@@ -282,6 +287,8 @@ class AmakerBotTracker():
 
     def on_UI_BUTTON_safety(self):
         """Handle safety button click"""
+        self.safety_deadline = datetime.datetime.now() + datetime.timedelta(seconds=25)
+
         if self.communication_manager:
             self.communication_manager.send(COMMAND_DANGER)
             self._add_log(f"> {COMMAND_DANGER}")
@@ -377,6 +384,8 @@ class AmakerBotTracker():
         """
         if self.deadline:
             self.amaker_ui.ui_add_countdown(frame, self.deadline)
+        if self.safety_deadline:
+            self.amaker_ui.ui_add_safety_countdown(frame, self.safety_deadline)
     def overlay_tags(self, frame, tags):
         """
         Overlay detected tags on the frame
