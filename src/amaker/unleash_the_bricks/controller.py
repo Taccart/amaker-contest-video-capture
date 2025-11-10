@@ -19,7 +19,7 @@ from amaker.unleash_the_bricks import \
 from amaker.unleash_the_bricks.CommunicationSignalEmitter import CommunicationSignalEmitter
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 # from amaker.unleash_the_bricks.controller_bridge import MessageType, CommandEnum
-from gui_video import AmakerUnleashTheBrickVideo
+from .gui_video import AmakerUnleashTheBrickVideo
 import re
 
 
