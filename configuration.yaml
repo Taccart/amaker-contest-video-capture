@@ -18,6 +18,15 @@ session_options:
    - "Terminator"
    - "TeslaCybertruck"
 
+communication:
+  serial_port: "/dev/ttyACM0"
+  serial_speed: 115200
+
+camera:
+  calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
+  number: 4    # Use -1 to interactively select from list of available cams
+
+
   ##improve: add a way to show/hide each element in output video
 #    show_walls: false
 #    show_grounds: true
@@ -29,13 +38,8 @@ window:
   width: 1920
   height: 1080
 
-camera:
-  calibration_file: "/home/taccart/development/github_perso/amaker-path-capture/TALogitechHDWebcamB910_calibration.npz" # see calibration.py
-  number: -1    # Use -1 to interactively select from list of available cams
 
-communication:
-  serial_port: "/dev/ttyACM1"
-  serial_speed: 115200
+
 
 logs:
   max_count: 20

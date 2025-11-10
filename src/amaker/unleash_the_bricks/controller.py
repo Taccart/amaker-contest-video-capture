@@ -401,7 +401,7 @@ class AmakerBotTracker():
                 elif self.reference_tags[tag.tag_id]["type"] == "goal":
                     color = UI_COLOR_TAG_GOAL
                     # only show goal tags if known
-                    self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color, label=self.reference_tags[tag.tag_id]["name"])
+                    self.amaker_ui.ui_add_tag(frame, self.mtx, self.dist, tag, color=color, label="")
             else:
                 self._LOG.info(f"Detected tag ID {tag.tag_id} is unkown")
 
