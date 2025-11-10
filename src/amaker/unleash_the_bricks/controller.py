@@ -16,6 +16,7 @@ from amaker.unleash_the_bricks import \
     UI_RGBCOLOR_GREY_LIGHT, UI_RGBCOLOR_GREY_MEDIUM, DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, UI_RGBCOLOR_GREY_DARK, \
     WINDOW_TITLE, UI_RGBCOLOR_ORANGE, UI_RGBCOLOR_HOTPINK, UI_RGBCOLOR_BRIGHTGREEN, UI_RGBCOLOR_LAVENDER, \
     VIDEO_OUT_WIDTH, VIDEO_OUT_HEIGHT, VIDEO_OUT_FPS, VIDEO_OUT_CODEC, UI_RGBCOLOR_YELLOW
+from amaker.unleash_the_bricks.CommunicationSignalEmitter import CommunicationSignalEmitter
 from amaker.unleash_the_bricks.bot import UnleashTheBrickBot
 # from amaker.unleash_the_bricks.controller_bridge import MessageType, CommandEnum
 from gui_video import AmakerUnleashTheBrickVideo
@@ -151,7 +152,11 @@ class AmakerBotTracker():
         if not self.video_capture.isOpened():
             raise ValueError(f"Camera {camera_index} not found or cannot be opened.")
 
-        self.amaker_ui = AmakerUnleashTheBrickVideo(config={}
+        if self.communication_manager:
+            self.comm_emitter = CommunicationSignalEmitter(self.communication_manager)
+            self.comm_emitter.data_received.connect(self._on_data_received)
+            self.comm_emitter.start_listening()
+            self.amaker_ui = AmakerUnleashTheBrickVideo(config={}
                                                     , buttons={
                 "start": self.on_UI_BUTTON_start
                 , "stop": self.on_UI_BUTTON_stop
@@ -228,6 +233,13 @@ class AmakerBotTracker():
             self._LOG.warning(f"Error stopping feed thread: {e}")
 
         try:
+
+            if hasattr(self, 'comm_emitter'):
+                self.comm_emitter.stop_listening()
+        except Exception as e:
+            self._LOG.warning(f"Error stopping comm_emitter : {e}")
+
+        try:
             if self.communication_manager:
                 self.communication_manager.close()
                 self._LOG.info("Communication closed.")
@@ -297,8 +309,9 @@ class AmakerBotTracker():
 
     def _on_data_received(self, data):
         #TODO: make the logic on message received.
-        self._LOG.info(data)
-        self._add_log("<" + data)
+        self._add_communication_log(data)
+        # self._LOG.info(data)
+        # self._add_log("<" + data)
 
     def _add_log(self, message):
         """
