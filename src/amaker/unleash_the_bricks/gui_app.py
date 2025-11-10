@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 import cv2
 import yaml
-from PyQt6.QtCore import Qt, QTimer, QSettings
+from PyQt6.QtCore import Qt, QTimer, QSettings, QObject, pyqtSignal, QMetaObject, Q_ARG
 from PyQt6.QtGui import QPixmap, QImage, QAction, QColor
 # PyQt imports - grouped together and explicitly formatted
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QTextEdit, QTableWidget,
@@ -147,6 +147,10 @@ class BotsDockWidget(QDockWidget):
         self.resize(current_width, new_height)
 
 
+class ThreadSafeLogSignaller(QObject):
+    """Helper class to emit log signals in a thread-safe manner"""
+    log_update_signal = pyqtSignal(list)
+
 class UILogHandler(logging.Handler):
     def __init__(self, log_window, max_lines=UI_SYSTEM_LOG_MAX_LINES):
         super().__init__()
@@ -154,6 +158,10 @@ class UILogHandler(logging.Handler):
         self.max_lines = max_lines
         self.log_buffer = []
         self.setFormatter(logging.Formatter(UI_SYSTEM_LOG_FORMAT, datefmt='%H:%M:%S'))
+        
+        # Create thread-safe signaller
+        self.signaller = ThreadSafeLogSignaller()
+        self.signaller.log_update_signal.connect(log_window.update_text)
 
     def emit(self, record):
         log_entry = self.format(record)
@@ -162,7 +170,8 @@ class UILogHandler(logging.Handler):
         if len(self.log_buffer) > self.max_lines:
             self.log_buffer = self.log_buffer[-self.max_lines:]
 
-        self.log_window.update_text(self.log_buffer)
+        # Use Qt's signal/slot mechanism for thread-safe UI updates
+        self.signaller.log_update_signal.emit(list(self.log_buffer))
 
 
 class AmakerControllerUI(QMainWindow):

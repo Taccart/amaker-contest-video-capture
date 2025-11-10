@@ -1,4 +1,4 @@
-from PyQt6.QtCore import QObject, pyqtSignal, QThread
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 class CommunicationSignalEmitter(QObject):
     """Thread-safe wrapper that emits Qt signals when data arrives"""
@@ -8,27 +8,29 @@ class CommunicationSignalEmitter(QObject):
         super().__init__()
         self.communication_manager = communication_manager
         self.running = False
+        
+        # Use QTimer instead of QThread for polling
+        # This keeps everything in the main Qt thread
+        self.poll_timer = QTimer()
+        self.poll_timer.timeout.connect(self._check_data)
 
     def start_listening(self):
-        """Start listening thread"""
+        """Start listening using QTimer (main thread)"""
         self.running = True
-        self.thread = QThread()
-        self.moveToThread(self.thread)
-        self.thread.started.connect(self._listen_loop)
-        self.thread.start()
+        self.poll_timer.start(10)  # Check every 10ms
 
-    def _listen_loop(self):
-        """Run in background thread, emit signals"""
-        while self.running and self.communication_manager:
-            if self.communication_manager.has_data():
-                data = self.communication_manager.get_next_data()
-                if data:
-                    self.data_received.emit(data)  # Thread-safe signal
-            QThread.msleep(10)  # Small delay
+    def _check_data(self):
+        """Check for data in main thread and emit signals"""
+        if not self.running or not self.communication_manager:
+            return
+            
+        if self.communication_manager.has_data():
+            data = self.communication_manager.get_next_data()
+            if data:
+                self.data_received.emit(data)  # Safe to emit from main thread
 
     def stop_listening(self):
-        """Stop listening thread"""
+        """Stop listening"""
         self.running = False
-        if hasattr(self, 'thread'):
-            self.thread.quit()
-            self.thread.wait()
+        if self.poll_timer.isActive():
+            self.poll_timer.stop()
